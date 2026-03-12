@@ -1,259 +1,280 @@
-import React from 'react'
-import { Sparkles, Calendar, AlertTriangle, Users, Building2, BarChart3, GripVertical, Mail, Phone, MapPin, Star } from 'lucide-react'
+import { useState } from "react";
 
 const features = [
   {
-    icon: AlertTriangle,
-    title: 'Clash Detection',
-    desc: 'Automatically detect scheduling conflicts and overlapping classes in real-time',
-    highlighted: false,
+    icon: "📤",
+    title: "Upload Excel Timetable",
+    desc: "Admin uploads the .xlsx timetable file directly. The system instantly parses all lectures, tutorials, and practicals across every batch and semester.",
+    tag: "Admin",
+    tagColor: "#7c3aed",
   },
   {
-    icon: Sparkles,
-    title: 'Auto Rescheduling',
-    desc: 'AI-powered smart suggestions to resolve clashes instantly with optimal solutions',
-    highlighted: true,
+    icon: "⚠️",
+    title: "3-Type Clash Detection",
+    desc: "Detects all three clash types automatically — Venue (double-booked room), Teacher (faculty in two classes), and Batch (students overlapping).",
+    tag: "Core",
+    tagColor: "#ef4444",
   },
   {
-    icon: Users,
-    title: 'Teacher Preferences',
-    desc: 'Respect faculty availability and preferred time slots for better work-life balance',
-    highlighted: false,
+    icon: "✨",
+    title: "AI Suggestions & Auto-Resolve",
+    desc: "Every detected clash gets an AI-generated fix. Resolve clashes individually with one click, or hit Auto-Resolve All to clear every conflict instantly.",
+    tag: "AI",
+    tagColor: "#f59e0b",
   },
   {
-    icon: Building2,
-    title: 'Room Optimization',
-    desc: 'Maximize space utilization with intelligent room allocation algorithms',
-    highlighted: false,
+    icon: "🚀",
+    title: "Publish to Students",
+    desc: "Once the timetable is clash-free, admin publishes it live. Students immediately gain access to view and download their personal schedule.",
+    tag: "Admin",
+    tagColor: "#7c3aed",
   },
   {
-    icon: BarChart3,
-    title: 'Analytics Dashboard',
-    desc: 'Visual insights into resource utilization, workload distribution, and efficiency',
-    highlighted: false,
+    icon: "🎓",
+    title: "Student Timetable View",
+    desc: "Students log in and filter by Branch, Semester, and Batch to see their full colour-coded weekly grid — subject, room, teacher, and class type per slot.",
+    tag: "Student",
+    tagColor: "#22c55e",
   },
   {
-    icon: GripVertical,
-    title: 'Drag & Drop Editor',
-    desc: 'Intuitive interface to manually adjust schedules with real-time conflict warnings',
-    highlighted: false,
+    icon: "📥",
+    title: "Download as Excel",
+    desc: "Admin exports the complete resolved timetable. Students download their own batch schedule. Both get neatly formatted .xlsx files ready to use.",
+    tag: "Export",
+    tagColor: "#06b6d4",
   },
-]
+];
 
 const stats = [
-  { label: 'Faculty Members', value: '450+' },
-  { label: 'Classrooms', value: '120+' },
-  { label: 'Subjects Managed', value: '800+' },
-  { label: 'Clashes Resolved', value: '99%' },
-]
+  { label: "Faculty Members", value: "450+" },
+  { label: "Classrooms", value: "120+" },
+  { label: "Subjects Managed", value: "800+" },
+  { label: "Clashes Resolved", value: "99%" },
+];
 
 export default function LandingPage({ onGetStarted }) {
+  const [hoveredFeature, setHoveredFeature] = useState(null);
+
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
-      {/* Navbar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-4 border-b border-white/5 bg-[#0a0a0a]/80 backdrop-blur-md">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-[#1e1a3a] border border-purple-700/40 rounded-lg flex items-center justify-center">
-            <Calendar size={18} className="text-purple-400" />
-          </div>
+    <div style={{ background: "#0a0a0a", color: "#fff", fontFamily: "'Inter', sans-serif", minHeight: "100vh", overflowX: "hidden" }}>
+
+      {/* ── Navbar ── */}
+      <nav style={{
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: 50,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "14px 40px",
+        borderBottom: "1px solid rgba(255,255,255,0.05)",
+        background: "rgba(10,10,10,0.85)", backdropFilter: "blur(12px)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{
+            width: 36, height: 36, background: "#1e1a3a",
+            border: "1px solid rgba(124,58,237,0.4)", borderRadius: 10,
+            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
+          }}>📅</div>
           <div>
-            <span className="font-bold text-white text-base">JIIT SmartSched AI</span>
-            <span className="block text-[10px] text-gray-500 leading-none">Sector 128 & 62</span>
+            <div style={{ fontWeight: 700, fontSize: 14, color: "#fff" }}>JIIT SmartSched AI</div>
+            <div style={{ fontSize: 10, color: "#6b7280" }}>Sector 128 & 62</div>
           </div>
         </div>
-        <div className="hidden md:flex items-center gap-8 text-sm text-gray-400">
-          <a href="#features" className="hover:text-white transition-colors">Features</a>
-          <a href="#about" className="hover:text-white transition-colors">About</a>
-          <a href="#contact" className="hover:text-white transition-colors">Contact</a>
+
+        <div style={{ display: "flex", gap: 32, fontSize: 13 }}>
+          {["Features", "About", "Contact"].map(l => (
+            <a key={l} href={`#${l.toLowerCase()}`}
+              style={{ color: "#9ca3af", textDecoration: "none", transition: "color 0.15s", cursor: "pointer" }}
+              onMouseEnter={e => e.target.style.color = "#fff"}
+              onMouseLeave={e => e.target.style.color = "#9ca3af"}
+            >{l}</a>
+          ))}
         </div>
-        <button
-          onClick={onGetStarted}
-          className="bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
-        >
-          Sign In
-        </button>
+
+        <button onClick={onGetStarted} style={{
+          background: "#7c3aed", color: "#fff", border: "none",
+          borderRadius: 10, padding: "9px 20px", fontSize: 13,
+          fontWeight: 600, cursor: "pointer", transition: "all 0.18s",
+        }}
+          onMouseEnter={e => { e.target.style.background = "#6d28d9"; e.target.style.transform = "translateY(-1px)"; }}
+          onMouseLeave={e => { e.target.style.background = "#7c3aed"; e.target.style.transform = "translateY(0)"; }}
+        >Sign In</button>
       </nav>
 
-      {/* Hero */}
-      <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-4 hero-gradient overflow-hidden pt-16">
-        {/* Background diagonal lines */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-0 right-0 w-[600px] h-[600px] opacity-20"
-            style={{
-              background: 'conic-gradient(from 200deg at 80% 40%, transparent 60deg, rgba(109,40,217,0.4) 120deg, transparent 180deg)',
-            }}
-          />
-          <div className="absolute bottom-0 right-10 w-[400px] h-[400px] opacity-10"
-            style={{
-              background: 'conic-gradient(from 160deg at 70% 70%, transparent 40deg, rgba(139,92,246,0.5) 100deg, transparent 160deg)',
-            }}
-          />
-        </div>
+      {/* ── Hero ── */}
+      <section style={{
+        position: "relative", minHeight: "100vh",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        textAlign: "center", padding: "120px 16px 80px",
+        background: "radial-gradient(ellipse at 65% 45%, rgba(109,40,217,0.28) 0%, rgba(15,10,30,0.5) 55%, #0a0a0a 100%)",
+        overflow: "hidden",
+      }}>
+        <div style={{ position: "absolute", top: 80, right: 80, width: 320, height: 320, background: "radial-gradient(circle, rgba(124,58,237,0.15) 0%, transparent 70%)", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", bottom: 120, left: 60, width: 240, height: 240, background: "radial-gradient(circle, rgba(59,130,246,0.08) 0%, transparent 70%)", pointerEvents: "none" }} />
 
-        <div className="relative z-10 max-w-4xl mx-auto">
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 bg-[#1e1a3a]/80 border border-purple-700/40 text-purple-300 text-sm px-4 py-1.5 rounded-full mb-8">
-            <Sparkles size={14} />
-            <span>AI-Powered Scheduling</span>
-          </div>
+        <div style={{
+          display: "inline-flex", alignItems: "center", gap: 7,
+          background: "rgba(30,26,58,0.85)", border: "1px solid rgba(124,58,237,0.35)",
+          color: "#c4b5fd", fontSize: 13, padding: "7px 18px", borderRadius: 99, marginBottom: 28,
+        }}>✨ AI-Powered Scheduling</div>
 
-          <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
-            JIIT SmartSched AI
-          </h1>
-          <p className="text-lg md:text-xl text-gray-400 mb-4 max-w-2xl mx-auto">
-            AI-powered timetable clash detection and optimization for
-            <br />
-            <span className="text-purple-400 font-medium">Jaypee Institute of Information Technology</span>
-          </p>
-          <p className="text-sm text-gray-600 mb-10">Sector 128, Noida &nbsp;•&nbsp; Sector 62, Noida</p>
+        <h1 style={{ fontSize: "clamp(42px, 7vw, 72px)", fontWeight: 800, color: "#fff", marginBottom: 20, lineHeight: 1.1, letterSpacing: "-0.02em" }}>
+          JIIT SmartSched AI
+        </h1>
+        <p style={{ fontSize: 18, color: "#9ca3af", marginBottom: 8, maxWidth: 540 }}>
+          AI-powered timetable clash detection and optimization for
+        </p>
+        <p style={{ fontSize: 18, color: "#a78bfa", fontWeight: 600, marginBottom: 10 }}>
+          Jaypee Institute of Information Technology
+        </p>
+        <p style={{ fontSize: 13, color: "#4b5563", marginBottom: 48 }}>
+          Sector 128, Noida &nbsp;•&nbsp; Sector 62, Noida
+        </p>
 
-          <button
-            onClick={onGetStarted}
-            className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold px-8 py-4 rounded-xl text-base transition-colors shadow-lg shadow-purple-900/40"
-          >
-            Get Started →
-          </button>
-        </div>
+        <button onClick={onGetStarted} style={{
+          display: "inline-flex", alignItems: "center", gap: 10,
+          background: "#7c3aed", color: "#fff", border: "none",
+          borderRadius: 14, padding: "15px 38px", fontSize: 15, fontWeight: 700, cursor: "pointer",
+          boxShadow: "0 8px 30px rgba(124,58,237,0.4)", transition: "all 0.2s cubic-bezier(.4,0,.2,1)",
+        }}
+          onMouseEnter={e => { e.currentTarget.style.background = "#6d28d9"; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 12px 40px rgba(124,58,237,0.55)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "#7c3aed"; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 8px 30px rgba(124,58,237,0.4)"; }}
+        >
+          Get Started <span style={{ fontSize: 18 }}>→</span>
+        </button>
       </section>
 
-      {/* Stats */}
-      <section className="bg-[#0d0d0d] border-y border-white/5 py-12">
-        <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 px-8">
-          {stats.map((s) => (
-            <div key={s.label} className="text-center">
-              <div className="text-3xl font-bold text-white mb-1">{s.value}</div>
-              <div className="text-sm text-gray-500">{s.label}</div>
+      {/* ── Stats ── */}
+      <section style={{ borderTop: "1px solid rgba(255,255,255,0.05)", borderBottom: "1px solid rgba(255,255,255,0.05)", padding: "36px 40px", background: "#0d0d0d" }}>
+        <div style={{ maxWidth: 900, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
+          {stats.map(s => (
+            <div key={s.label} style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 32, fontWeight: 700, color: "#fff", marginBottom: 5 }}>{s.value}</div>
+              <div style={{ fontSize: 13, color: "#6b7280" }}>{s.label}</div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Features */}
-      <section id="features" className="py-24 px-8 bg-[#0a0a0a]">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-white mb-4">Powerful Features</h2>
-            <p className="text-gray-400 text-lg">Everything you need to manage JIIT timetables efficiently</p>
+      {/* ── Features ── */}
+      <section id="features" style={{ padding: "80px 40px", background: "#0a0a0a" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 56 }}>
+            <h2 style={{ fontSize: 38, fontWeight: 700, color: "#fff", marginBottom: 12 }}>Powerful Features</h2>
+            <p style={{ color: "#6b7280", fontSize: 16 }}>Everything you need to manage JIIT timetables efficiently</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {features.map((f) => {
-              const Icon = f.icon
-              return (
-                <div
-                  key={f.title}
-                  className="p-6 rounded-2xl border card-hover bg-[#111111] border-white/5"
-                >
-                  <div className="w-12 h-12 bg-[#1e1a3a] rounded-xl flex items-center justify-center mb-5">
-                    <Icon size={22} className="text-purple-400" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-white mb-2">{f.title}</h3>
-                  <p className="text-gray-400 text-sm leading-relaxed">{f.desc}</p>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </section>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+            {features.map((f, i) => (
+              <div key={f.title}
+                onMouseEnter={() => setHoveredFeature(i)}
+                onMouseLeave={() => setHoveredFeature(null)}
+                style={{
+                  background: "#111111",
+                  border: hoveredFeature === i ? "1px solid rgba(124,58,237,0.45)" : "1px solid rgba(255,255,255,0.06)",
+                  borderRadius: 18, padding: "26px 24px", cursor: "default",
+                  transition: "all 0.22s cubic-bezier(.4,0,.2,1)",
+                  transform: hoveredFeature === i ? "translateY(-6px)" : "translateY(0)",
+                  boxShadow: hoveredFeature === i ? "0 20px 48px rgba(124,58,237,0.18)" : "none",
+                }}>
 
-      {/* Campus Info */}
-      <section id="about" className="py-24 px-8 bg-[#0d0d0d] border-t border-white/5">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-white mb-4">Our Campuses</h2>
-            <p className="text-gray-400 text-lg">Serving both JIIT campuses with unified scheduling</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {[
-              {
-                sector: 'Sector 128',
-                location: 'A-10, Sector 128, Noida, UP 201304',
-                departments: ['Computer Science & Engineering', 'Electronics & Communication', 'Biotechnology', 'Humanities & Social Sciences'],
-                color: 'border-purple-600/50',
-                badge: 'bg-purple-900/40 text-purple-300',
-              },
-              {
-                sector: 'Sector 62',
-                location: 'H-165, Sector 63, Noida, UP 201307',
-                departments: ['Information Technology', 'Computer Science', 'Electronics', 'Mathematics & Computing'],
-                color: 'border-blue-600/30',
-                badge: 'bg-blue-900/30 text-blue-300',
-              },
-            ].map((campus) => (
-              <div key={campus.sector} className={`p-8 bg-[#111111] rounded-2xl border ${campus.color} card-hover`}>
-                <div className={`inline-block text-xs font-semibold px-3 py-1 rounded-full mb-4 ${campus.badge}`}>
-                  {campus.sector}
+                {/* Icon box */}
+                <div style={{
+                  width: 52, height: 52,
+                  background: hoveredFeature === i ? "#7c3aed" : "#1a1730",
+                  borderRadius: 14, display: "flex", alignItems: "center",
+                  justifyContent: "center", fontSize: 22, marginBottom: 18,
+                  transition: "background 0.2s",
+                  border: hoveredFeature === i ? "none" : "1px solid rgba(124,58,237,0.2)",
+                }}>{f.icon}</div>
+
+                {/* Title + Role tag */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>{f.title}</span>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: "2px 9px", borderRadius: 99,
+                    background: `${f.tagColor}18`, color: f.tagColor,
+                    border: `1px solid ${f.tagColor}40`, whiteSpace: "nowrap", letterSpacing: "0.03em",
+                  }}>{f.tag}</span>
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2">JIIT {campus.sector}</h3>
-                <p className="text-gray-500 text-sm mb-6 flex items-center gap-2">
-                  <MapPin size={14} />
-                  {campus.location}
-                </p>
-                <div className="space-y-2">
-                  {campus.departments.map((dept) => (
-                    <div key={dept} className="flex items-center gap-2 text-sm text-gray-400">
-                      <div className="w-1.5 h-1.5 bg-purple-500 rounded-full" />
-                      {dept}
-                    </div>
-                  ))}
-                </div>
+
+                <div style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.7 }}>{f.desc}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer id="contact" className="bg-[#0a0a0a] border-t border-white/5 py-16 px-8">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-12">
-          {/* Brand */}
-          <div>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-9 h-9 bg-[#1e1a3a] border border-purple-700/40 rounded-lg flex items-center justify-center">
-                <Calendar size={18} className="text-purple-400" />
-              </div>
-              <span className="font-bold text-white">JIIT SmartSched AI</span>
-            </div>
-            <p className="text-gray-500 text-sm leading-relaxed">
-              Intelligent timetable management for JIIT — Sector 128 & Sector 62, Noida.
-            </p>
+      {/* ── Campuses ── */}
+      <section id="about" style={{ padding: "80px 40px", background: "#0d0d0d", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 52 }}>
+            <h2 style={{ fontSize: 36, fontWeight: 700, color: "#fff", marginBottom: 10 }}>Our Campuses</h2>
+            <p style={{ color: "#6b7280", fontSize: 15 }}>Serving both JIIT campuses with unified scheduling</p>
           </div>
 
-          {/* Contact */}
-          <div>
-            <h4 className="text-white font-semibold mb-5">Contact Us</h4>
-            <div className="space-y-3 text-sm text-gray-400">
-              <div className="flex items-center gap-3">
-                <Mail size={14} className="text-gray-600" />
-                <span>support@jiit.ac.in</span>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+            {[
+              {
+                sector: "Sector 128", label: "JIIT Sector 128",
+                addr: "A-10, Sector 128, Noida, UP 201304",
+                depts: ["Computer Science & Engineering", "Electronics & Communication", "Biotechnology", "Humanities & Social Sciences"],
+                borderColor: "rgba(124,58,237,0.4)", tagBg: "rgba(88,28,135,0.5)", tagColor: "#c4b5fd",
+              },
+              {
+                sector: "Sector 62", label: "JIIT Sector 62",
+                addr: "H-165, Sector 63, Noida, UP 201307",
+                depts: ["Information Technology", "Computer Science", "Electronics", "Mathematics & Computing"],
+                borderColor: "rgba(59,130,246,0.3)", tagBg: "rgba(30,58,138,0.5)", tagColor: "#93c5fd",
+              },
+            ].map(c => (
+              <div key={c.sector} style={{ background: "#111111", border: `1px solid ${c.borderColor}`, borderRadius: 18, padding: 28 }}>
+                <div style={{ display: "inline-block", background: c.tagBg, color: c.tagColor, fontSize: 11, fontWeight: 600, padding: "4px 14px", borderRadius: 99, marginBottom: 14 }}>{c.sector}</div>
+                <h3 style={{ fontSize: 20, fontWeight: 700, color: "#fff", marginBottom: 8 }}>{c.label}</h3>
+                <p style={{ color: "#6b7280", fontSize: 13, marginBottom: 18 }}>📍 {c.addr}</p>
+                {c.depts.map(d => (
+                  <div key={d} style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13, color: "#9ca3af", marginBottom: 9 }}>
+                    <div style={{ width: 6, height: 6, background: "#7c3aed", borderRadius: "50%", flexShrink: 0 }} />{d}
+                  </div>
+                ))}
               </div>
-              <div className="flex items-center gap-3">
-                <Phone size={14} className="text-gray-600" />
-                <span>+91 120 234-3000</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <MapPin size={14} className="text-gray-600" />
-                <span>Sector 128 & Sector 62, Noida, UP</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Links */}
-          <div>
-            <h4 className="text-white font-semibold mb-5">Quick Links</h4>
-            <div className="space-y-2 text-sm text-gray-400">
-              <a href="#" className="block hover:text-white transition-colors">Documentation</a>
-              <a href="#" className="block hover:text-white transition-colors">API Reference</a>
-              <a href="#" className="block hover:text-white transition-colors">Privacy Policy</a>
-              <a href="#" className="block hover:text-white transition-colors">Terms of Service</a>
-            </div>
+            ))}
           </div>
         </div>
+      </section>
 
-        <div className="max-w-6xl mx-auto mt-12 pt-8 border-t border-white/5 text-center">
-          <p className="text-gray-600 text-sm">© 2024 JIIT SmartSched AI. All rights reserved.</p>
+      {/* ── Footer ── */}
+      <footer id="contact" style={{ borderTop: "1px solid rgba(255,255,255,0.05)", padding: "56px 40px 28px", background: "#0a0a0a" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 48, marginBottom: 48 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+              <div style={{ width: 34, height: 34, background: "#1e1a3a", border: "1px solid rgba(124,58,237,0.4)", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>📅</div>
+              <span style={{ fontWeight: 700, fontSize: 14, color: "#fff" }}>JIIT SmartSched AI</span>
+            </div>
+            <p style={{ fontSize: 12, color: "#4b5563", lineHeight: 1.8 }}>Intelligent timetable management for JIIT — Sector 128 & Sector 62, Noida.</p>
+          </div>
+
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#fff", marginBottom: 18 }}>Contact Us</div>
+            {[["✉️", "support@jiit.ac.in"], ["📞", "+91 120 234-3000"], ["📍", "Sector 128 & Sector 62, Noida, UP"]].map(([icon, text]) => (
+              <div key={text} style={{ display: "flex", gap: 10, fontSize: 13, color: "#6b7280", marginBottom: 11 }}>
+                <span>{icon}</span><span>{text}</span>
+              </div>
+            ))}
+          </div>
+
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#fff", marginBottom: 18 }}>Quick Links</div>
+            {["Documentation", "API Reference", "Privacy Policy", "Terms of Service"].map(l => (
+              <div key={l} style={{ fontSize: 13, color: "#6b7280", marginBottom: 10, cursor: "pointer" }}
+                onMouseEnter={e => e.target.style.color = "#a78bfa"}
+                onMouseLeave={e => e.target.style.color = "#6b7280"}
+              >{l}</div>
+            ))}
+          </div>
+        </div>
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 22, textAlign: "center", fontSize: 12, color: "#374151" }}>
+          © 2024 JIIT SmartSched AI. All rights reserved.
         </div>
       </footer>
     </div>
-  )
+  );
 }

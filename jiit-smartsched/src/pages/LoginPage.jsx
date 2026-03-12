@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { DEMO_USERS } from "../utils/constants";
 import Spinner from "../components/Spinner";
 
 const ROLES = [
@@ -14,13 +13,48 @@ export default function LoginPage({ onLogin }) {
   const [err,     setErr]     = useState("");
   const [loading, setLoading] = useState(false);
 
-  const go = () => {
-    setErr(""); setLoading(true);
-    setTimeout(() => {
-      const found = DEMO_USERS.find(u => u.username === user && u.password === pass && u.role === role);
-      if (found) { onLogin(found); }
-      else { setErr("Invalid credentials. Use the demo credentials below."); setLoading(false); }
-    }, 800);
+  const go = async () => {
+    setErr("");
+    if (!user.trim() || !pass.trim()) {
+      setErr("Please enter your Employee ID and password.");
+      return;
+    }
+    setLoading(true);
+
+    try {
+      if (role === "admin") {
+        // ── Real MongoDB login ──────────────────────────
+        const res  = await fetch("http://localhost:5000/api/auth/login", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ employeeId: user.trim(), password: pass }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          setErr(data.error || "Invalid credentials.");
+          setLoading(false);
+          return;
+        }
+
+        // Save token for later API calls
+        localStorage.setItem("token", data.token);
+        onLogin({ ...data.user, role: "admin" });
+
+      } else {
+        // ── Student login (simple check) ────────────────
+        // Replace this with your own student auth if you add it later
+        if (user.trim() === "student1" && pass === "student123") {
+          onLogin({ username: user.trim(), role: "student" });
+        } else {
+          setErr("Invalid student credentials. Use student1 / student123");
+          setLoading(false);
+        }
+      }
+    } catch (e) {
+      setErr("Cannot connect to server. Make sure backend is running on port 5000.");
+      setLoading(false);
+    }
   };
 
   return (
@@ -40,7 +74,7 @@ export default function LoginPage({ onLogin }) {
             width:58, height:58, background:"#1e1a3a",
             border:"1px solid rgba(124,58,237,.45)", borderRadius:18,
             display:"flex", alignItems:"center", justifyContent:"center",
-            fontSize:28, margin:"0 auto 16px", animation:"glow 3s ease infinite",
+            fontSize:28, margin:"0 auto 16px",
           }}>
             📅
           </div>
@@ -62,7 +96,7 @@ export default function LoginPage({ onLogin }) {
           {/* Role selector */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:22 }}>
             {ROLES.map(r => (
-              <div key={r.id} className={`role-btn${role === r.id ? " sel" : ""}`} onClick={() => setRole(r.id)}>
+              <div key={r.id} className={`role-btn${role === r.id ? " sel" : ""}`} onClick={() => { setRole(r.id); setErr(""); setUser(""); setPass(""); }}>
                 <div style={{ fontSize:24, marginBottom:8 }}>{r.icon}</div>
                 <div style={{ fontSize:13, fontWeight:700, color: role === r.id ? "#c4b5fd" : "#fff", marginBottom:4 }}>{r.label}</div>
                 <div style={{ fontSize:11, color:"#6b7280", lineHeight:1.5 }}>{r.desc}</div>
@@ -72,10 +106,12 @@ export default function LoginPage({ onLogin }) {
 
           {/* Fields */}
           <div style={{ marginBottom:12 }}>
-            <div style={{ fontSize:11, color:"#6b7280", marginBottom:5, fontWeight:500 }}>Username</div>
+            <div style={{ fontSize:11, color:"#6b7280", marginBottom:5, fontWeight:500 }}>
+              {role === "admin" ? "Employee ID" : "Username"}
+            </div>
             <input
               className="inp"
-              placeholder={role === "admin" ? "admin" : "student1"}
+              placeholder={role === "admin" ? "e.g. JIIT001" : "student1"}
               value={user}
               onChange={e => setUser(e.target.value)}
               onKeyDown={e => e.key === "Enter" && go()}
@@ -109,19 +145,30 @@ export default function LoginPage({ onLogin }) {
             {loading ? <Spinner /> : `Sign in as ${ROLES.find(r => r.id === role)?.label} →`}
           </button>
 
-          {/* Demo hint */}
+          {/* Credentials hint */}
           <div style={{
             marginTop:16, padding:"12px 14px",
             background:"rgba(124,58,237,.06)", borderRadius:11,
             border:"1px solid rgba(124,58,237,.15)",
           }}>
-            <div style={{ fontSize:11, color:"#a78bfa", fontWeight:700, marginBottom:5 }}>🔑 Demo Credentials</div>
-            <div style={{ fontSize:11, color:"#6b7280", marginBottom:2 }}>
-              Admin → <span style={{ color:"#e5e7eb" }}>admin / admin123</span>
-            </div>
-            <div style={{ fontSize:11, color:"#6b7280" }}>
-              Student → <span style={{ color:"#e5e7eb" }}>student1 / student123</span>
-            </div>
+            {role === "admin" ? (
+              <>
+                <div style={{ fontSize:11, color:"#a78bfa", fontWeight:700, marginBottom:5 }}>🔑 Admin Credentials</div>
+                <div style={{ fontSize:11, color:"#6b7280", marginBottom:2 }}>
+                  Employee ID → <span style={{ color:"#e5e7eb" }}>JIIT001 to JIIT100</span>
+                </div>
+                <div style={{ fontSize:11, color:"#6b7280" }}>
+                  Password → <span style={{ color:"#e5e7eb" }}>Admin@2026</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize:11, color:"#a78bfa", fontWeight:700, marginBottom:5 }}>🔑 Student Credentials</div>
+                <div style={{ fontSize:11, color:"#6b7280" }}>
+                  Username → <span style={{ color:"#e5e7eb" }}>student1</span> &nbsp;|&nbsp; Password → <span style={{ color:"#e5e7eb" }}>student123</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
