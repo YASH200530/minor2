@@ -41,7 +41,18 @@ function detectClashes(entries) {
     const bm = {};
     slot.forEach(e => e.batches.forEach(b => (bm[b] = bm[b] || []).push(e)));
     Object.entries(bm).forEach(([batch, es]) => {
-      if (es.length > 1)
+      if (es.length > 1) {
+        // Elective group heuristic: 
+        // Open Electives (OE) or combined batches (e.g., LABC, LAB, LAC, AB, ABC) 
+        // intentionally have multiple DIFFERENT subjects at the same time.
+        const uniqueSubjects = new Set(es.map(x => x.subject)).size;
+
+        // If it's a known alphabetic combination (like LABC, AB) - skip it if there are multiple subjects.
+        // Also skip it for *any* batch if there are 3+ different subjects (that is definitely an elective block)
+        if (uniqueSubjects > 1 && (/^[A-Za-z]+$/.test(batch) || es.length >= 3)) {
+          return; // Ignore this elective block, it's not a real clash
+        }
+
         clashes.push({
           type: "batch", label: "Batch Clash", day, time,
           detail: `Batch ${batch}`,
@@ -49,6 +60,7 @@ function detectClashes(entries) {
           suggestion: `Reschedule ${es[1].subject} for batch ${batch} to a free time slot`,
           entries: es, status: "pending",
         });
+      }
     });
   });
 

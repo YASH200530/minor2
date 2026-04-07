@@ -8,6 +8,8 @@ const {
   getClashes,
   resolveClash,
   resolveAllClashes,
+
+  autoScheduleTimetable,
   publishTimetable,
   getPublishedStatus,
   getStudentTimetable,
@@ -15,7 +17,7 @@ const {
   downloadBatchTimetable,
 } = require("../controllers/timetableController");
 
-// Multer: store file in memory (no disk write needed)
+// Multer: store file in memory
 const upload = multer({
   storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
@@ -25,21 +27,23 @@ const upload = multer({
       cb(new Error("Only Excel files (.xlsx/.xls) are allowed"));
     }
   },
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  limits: { fileSize: 10 * 1024 * 1024 },
 });
 
 // ── Admin routes ────────────────────────────────────────────
-router.post("/upload",             upload.single("timetable"), uploadTimetable);
-router.get("/entries",             getEntries);
-router.get("/clashes",             getClashes);
+router.post("/upload",               upload.single("timetable"), uploadTimetable);
+router.get("/entries",               getEntries);
+router.get("/clashes",               getClashes);
 router.patch("/clashes/:id/resolve", resolveClash);
 router.post("/clashes/resolve-all",  resolveAllClashes);
-router.post("/publish",            publishTimetable);
-router.get("/download/full",       downloadFullTimetable);
+
+router.post("/auto-schedule",        autoScheduleTimetable);
+router.post("/publish",              publishTimetable);
+router.get("/download/full",         downloadFullTimetable);
 
 // ── Student routes ──────────────────────────────────────────
-router.get("/published",           getPublishedStatus);
-router.get("/student",             getStudentTimetable);       // ?batch=A1
+router.get("/published",             getPublishedStatus);
+router.get("/student",               getStudentTimetable);
 router.get("/download/batch/:batch", downloadBatchTimetable);
 
 module.exports = router;

@@ -1,11 +1,11 @@
 // All API calls to the backend
 const BASE = "http://localhost:5000/api/timetable";
 
-// Helper: download a blob as a file
+// Helper: trigger a file download from a Blob
 export function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a   = document.createElement("a");
-  a.href    = url;
+  a.href     = url;
   a.download = filename;
   document.body.appendChild(a);
   a.click();
@@ -15,51 +15,49 @@ export function downloadBlob(blob, filename) {
 
 // ── Admin ────────────────────────────────────────────────────
 
-// Upload Excel file → backend parses + detects clashes
 export async function uploadTimetable(file) {
   const fd = new FormData();
   fd.append("timetable", file);
-  const res = await fetch(`${BASE}/upload`, { method:"POST", body: fd });
+  const res = await fetch(`${BASE}/upload`, { method: "POST", body: fd });
   if (!res.ok) throw new Error((await res.json()).error);
   return res.json();
 }
 
-// Get all parsed entries
 export async function getEntries() {
   const res = await fetch(`${BASE}/entries`);
   if (!res.ok) throw new Error((await res.json()).error);
   return res.json();
 }
 
-// Get all clashes with their current status
 export async function getClashes() {
   const res = await fetch(`${BASE}/clashes`);
   if (!res.ok) throw new Error((await res.json()).error);
   return res.json();
 }
 
-// Resolve a single clash by its index
-export async function resolveClash(index) {
-  const res = await fetch(`${BASE}/clashes/${index}/resolve`, { method:"PATCH" });
+export async function resolveClash(index, options = {}) {
+  const res = await fetch(`${BASE}/clashes/${index}/resolve`, { 
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(options)
+  });
   if (!res.ok) throw new Error((await res.json()).error);
   return res.json();
 }
 
-// Resolve all pending clashes at once
 export async function resolveAllClashes() {
-  const res = await fetch(`${BASE}/clashes/resolve-all`, { method:"POST" });
+  const res = await fetch(`${BASE}/clashes/resolve-all`, { method: "POST" });
   if (!res.ok) throw new Error((await res.json()).error);
   return res.json();
 }
 
-// Publish timetable so students can see it
+
 export async function publishTimetable() {
-  const res = await fetch(`${BASE}/publish`, { method:"POST" });
+  const res = await fetch(`${BASE}/publish`, { method: "POST" });
   if (!res.ok) throw new Error((await res.json()).error);
   return res.json();
 }
 
-// Admin downloads full resolved timetable as Excel
 export async function downloadFullTimetable() {
   const res = await fetch(`${BASE}/download/full`);
   if (!res.ok) throw new Error((await res.json()).error);
@@ -69,21 +67,18 @@ export async function downloadFullTimetable() {
 
 // ── Student ──────────────────────────────────────────────────
 
-// Check if timetable has been published by admin
 export async function getPublishedStatus() {
   const res = await fetch(`${BASE}/published`);
   if (!res.ok) throw new Error((await res.json()).error);
   return res.json();
 }
 
-// Get timetable entries for a specific batch
 export async function getStudentTimetable(batch) {
   const res = await fetch(`${BASE}/student?batch=${batch}`);
   if (!res.ok) throw new Error((await res.json()).error);
   return res.json();
 }
 
-// Student downloads their batch timetable as Excel
 export async function downloadBatchTimetable(batch) {
   const res = await fetch(`${BASE}/download/batch/${batch}`);
   if (!res.ok) throw new Error((await res.json()).error);

@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { TIME_SLOTS, DAY_LABELS, getSubjectColor, getSubjectName } from "../utils/constants";
+import { getSubjectColor, getSubjectName } from "../utils/constants";
 import Chip from "./Chip";
 
-export default function TimetableGrid({ entries = [], clashes = [], batchFilter = null }) {
+export default function TimetableGrid({ entries = [], clashes = [], batchFilter = null, onMoveEntry }) {
   const [subFilter, setSubFilter] = useState("all");
 
   // Build a set of (day||time||raw) for pending clashes to highlight cells
@@ -13,9 +13,29 @@ export default function TimetableGrid({ entries = [], clashes = [], batchFilter 
 
   const allSubjects = [...new Set(entries.map(e => e.subject))].sort();
 
+  // Dynamically extract unique days and times from the actual data so 
+  // it seamlessly adapts to ANY excel file format (like "MON" or "Monday", "8-9AM" or "9:00")
+  const dynamicDays = [...new Set(entries.map(e => e.day))].filter(Boolean);
+
+  const parseTime = (timeStr) => {
+    const numMatch = timeStr.match(/\d+/);
+    if (!numMatch) return 0;
+    let hour = parseInt(numMatch[0], 10);
+    // Adjust for PM
+    if (timeStr.toUpperCase().includes("PM") && hour < 12) hour += 12;
+    // Assume 1 to 7 are PM (13:00 - 19:00) in university contexts if AM isn't specified
+    if (!timeStr.toUpperCase().includes("AM") && hour >= 1 && hour <= 7) hour += 12;
+    if (timeStr.toUpperCase().includes("LUNCH")) return 12.5; 
+    return hour;
+  };
+
+  const dynamicTimes = [...new Set(entries.map(e => e.time))]
+    .filter(Boolean)
+    .sort((a, b) => parseTime(a) - parseTime(b));
+
   // Build grid: key = "Day||Time" → array of entries
   const grid = {};
-  DAY_LABELS.forEach(d => TIME_SLOTS.forEach(t => { grid[`${d.f}||${t}`] = []; }));
+  dynamicDays.forEach(d => dynamicTimes.forEach(t => { grid[`${d}||${t}`] = []; }));
   entries.forEach(e => {
     if (batchFilter && !e.batches.includes(batchFilter)) return;
     if (subFilter !== "all" && e.subject !== subFilter) return;
@@ -67,49 +87,69 @@ export default function TimetableGrid({ entries = [], clashes = [], batchFilter 
               <th style={{ padding:"12px 14px", textAlign:"left", fontSize:11, color:"#6b7280", fontWeight:500, width:78 }}>
                 Time
               </th>
-              {DAY_LABELS.map(d => (
-                <th key={d.s} style={{
+              {dynamicDays.map(d => (
+                <th key={d} style={{
                   padding:"12px 6px", fontSize:11, fontWeight:700, color:"#fff",
                   borderLeft:"1px solid rgba(255,255,255,.04)", textAlign:"center",
-                  letterSpacing:".05em",
+                  letterSpacing:".05em", textTransform: "uppercase"
                 }}>
-                  {d.s}
+                  {d}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {TIME_SLOTS.map(time => (
+            {dynamicTimes.map(time => (
               <tr key={time} className="time-row" style={{ borderTop:"1px solid rgba(255,255,255,.04)" }}>
                 <td style={{ padding:"6px 14px", fontSize:11, color:"#6b7280", whiteSpace:"nowrap", fontWeight:500 }}>
-                  {time === "LUNCH" ? "🍽 Lunch" : time}
+                  {time.toUpperCase() === "LUNCH" ? "🍽 Lunch" : time}
                 </td>
-                {DAY_LABELS.map(d => {
-                  const cells = grid[`${d.f}||${time}`] || [];
+                {dynamicDays.map(d => {
+                  const cells = grid[`${d}||${time}`] || [];
                   return (
-                    <td key={d.s} style={{
+                    <td key={d} 
+                      onDragOver={time.toUpperCase() !== "LUNCH" ? (e) => e.preventDefault() : undefined}
+                      onDrop={time.toUpperCase() !== "LUNCH" ? (e) => {
+                        e.preventDefault();
+                        try {
+                          const dragData = JSON.parse(e.dataTransfer.getData("application/json"));
+                          if (onMoveEntry) {
+                            onMoveEntry(dragData, d, time);
+                          } else {
+                            console.log("Moved", dragData, "to", d, time);
+                          }
+                        } catch (err) { console.error("Drag err:", err) }
+                      } : undefined}
+                      style={{
                       padding:3,
                       borderLeft:"1px solid rgba(255,255,255,.04)",
                       verticalAlign:"top", minWidth:108,
-                      background: time === "LUNCH" ? "rgba(255,255,255,.015)" : "transparent",
+                      background: time.toUpperCase() === "LUNCH" ? "rgba(255,255,255,.015)" : "transparent",
                     }}>
-                      {time === "LUNCH"
+                      {time.toUpperCase() === "LUNCH"
                         ? <div style={{ textAlign:"center", padding:"10px 0", fontSize:11, color:"#2a2a2a" }}>—</div>
                         : (
-                          <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                          <div style={{ display:"flex", flexDirection:"column", gap:2, minHeight: "40px" }}>
                             {cells.map((cell, ci) => {
                               const isClash = clashSet.has(`${cell.day}||${cell.time}||${cell.raw}`);
                               const col = getSubjectColor(cell.subject);
                               return (
                                 <div
                                   key={ci}
-                                  className="tt-cell"
+                                  draggable
+                                  onDragStart={(e) => {
+                                    e.dataTransfer.setData("application/json", JSON.stringify({ 
+                                      raw: cell.raw, day: cell.day, time: cell.time, subject: cell.subject 
+                                    }));
+                                  }}
+                                  className="tt-cell cursor-move hover:scale-[1.02] transition-transform duration-200"
                                   title={`${getSubjectName(cell.subject)} | Batches: ${cell.batches.join(",")} | Room: ${cell.venue} | Teacher: ${cell.teacher}`}
                                   style={{
                                     borderRadius:9,
                                     border:`1px solid ${isClash ? "#ef4444" : col}55`,
                                     background: isClash ? "rgba(239,68,68,.13)" : `${col}1c`,
                                     padding:"5px 7px",
+                                    cursor: "grab"
                                   }}
                                 >
                                   {isClash && (

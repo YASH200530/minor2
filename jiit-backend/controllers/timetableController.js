@@ -1,19 +1,23 @@
 const XLSX = require("xlsx");
 const path = require("path");
-const { parseTimetableSheet } = require("../utils/parser");
+const { parseMatrixSheet } = require("../utils/matrixParser");
 const { detectClashes }       = require("../utils/clashDetector");
+const { suggestSlots, autoSchedule } = require("../utils/constraintSolver");
 const { exportFullTimetable, exportBatchTimetable } = require("../utils/excelExporter");
 
-// In-memory store (replace with MongoDB in production)
+// In-memory store
 let store = {
-  entries:   [],
-  clashes:   [],
-  published: false,
-  fileName:  "",
+  entries:    [],
+  clashes:    [],
+  published:  false,
+  fileName:   "",
   uploadedAt: null,
+  publishedAt: null,
 };
 
-// POST /api/timetable/upload
+
+
+// ── POST /api/timetable/upload ────────────────────────────────────────────────
 const uploadTimetable = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
@@ -22,8 +26,17 @@ const uploadTimetable = async (req, res) => {
     const ws   = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
 
-    const entries = parseTimetableSheet(rows);
+    const entries = parseMatrixSheet(rows);
     const clashes = detectClashes(entries);
+
+    // Attach CSP solver suggestions to each clash instantly
+    clashes.forEach(clash => {
+      if (clash.entries.length > 0) {
+        clash.suggestedSlots = suggestSlots(clash.entries[0], entries);
+      }
+    });
+
+
 
     store.entries    = entries;
     store.clashes    = clashes;
@@ -32,14 +45,14 @@ const uploadTimetable = async (req, res) => {
     store.uploadedAt = new Date();
 
     res.json({
-      message:   "Timetable uploaded and analyzed",
-      entries:   entries.length,
-      clashes:   clashes.length,
+      message:        "Timetable uploaded and AI-analysed",
+      entries:        entries.length,
+      clashes:        clashes.length,
       venueClashes:   clashes.filter(c => c.type === "venue").length,
       teacherClashes: clashes.filter(c => c.type === "teacher").length,
       batchClashes:   clashes.filter(c => c.type === "batch").length,
-      fileName:  store.fileName,
-      uploadedAt: store.uploadedAt,
+      fileName:       store.fileName,
+      uploadedAt:     store.uploadedAt,
     });
   } catch (err) {
     console.error(err);
@@ -47,42 +60,98 @@ const uploadTimetable = async (req, res) => {
   }
 };
 
-// GET /api/timetable/entries
+// ── GET /api/timetable/entries ────────────────────────────────────────────────
 const getEntries = (req, res) => {
   res.json({ entries: store.entries, fileName: store.fileName, uploadedAt: store.uploadedAt });
 };
 
-// GET /api/timetable/clashes
+// ── GET /api/timetable/clashes ────────────────────────────────────────────────
 const getClashes = (req, res) => {
   res.json({
-    clashes:   store.clashes,
-    pending:   store.clashes.filter(c => c.status === "pending").length,
-    resolved:  store.clashes.filter(c => c.status === "resolved").length,
-    total:     store.clashes.length,
+    clashes:  store.clashes,
+    pending:  store.clashes.filter(c => c.status === "pending").length,
+    resolved: store.clashes.filter(c => c.status === "resolved").length,
+    total:    store.clashes.length,
   });
 };
 
-// PATCH /api/timetable/clashes/:id/resolve  — resolve one clash
+// ── PATCH /api/timetable/clashes/:id/resolve ─────────────────────────────────
 const resolveClash = (req, res) => {
   const { id } = req.params;
-  const clash = store.clashes.find(c => c.type + "-" + c.day + "-" + c.time + "-" + c.detail === id
-    || c._id === id);
-
-  // Find by index if direct match fails
   const idx = store.clashes.findIndex((_, i) => String(i) === id);
   if (idx === -1) return res.status(404).json({ error: "Clash not found" });
+  
+  const clash = store.clashes[idx];
+  clash.status     = "resolved";
+  clash.resolvedBy = "manual";
 
-  store.clashes[idx].status = "resolved";
-  res.json({ message: "Clash resolved", clash: store.clashes[idx] });
+  if (req.body && req.body.appliedChanges) {
+    clash.appliedChanges = req.body.appliedChanges;
+    clash.appliedChanges = req.body.appliedChanges;
+
+    // Physically mutate the store entries so the grid updates
+    req.body.appliedChanges.forEach(change => {
+      const targetClashEntry = clash.entries[change.classIndex || 0];
+      if (!targetClashEntry) return;
+
+      const storeEntry = store.entries.find(e => 
+        e.raw === targetClashEntry.raw && 
+        e.day === targetClashEntry.day && 
+        e.time === targetClashEntry.time
+      );
+
+      if (storeEntry) {
+        if (change.field === 'time') {
+          // CSP frontend sends format "Day Time" in newValue (e.g. "MON 9:00AM")
+          const parts = String(change.newValue).split(" ");
+          if (parts.length >= 2) {
+            const newDay = parts[0];
+            const newTime = parts.slice(1).join(" ");
+            storeEntry.day = newDay;
+            storeEntry.time = newTime;
+            targetClashEntry.day = newDay;
+            targetClashEntry.time = newTime;
+          }
+        } else if (change.field === 'venue') {
+          storeEntry.venue = change.newValue;
+          targetClashEntry.venue = change.newValue;
+        }
+      }
+    });
+  }
+
+  res.json({ message: "Clash resolved", clash });
 };
 
-// POST /api/timetable/clashes/resolve-all  — resolve all pending clashes
+// ── POST /api/timetable/clashes/resolve-all ──────────────────────────────────
 const resolveAllClashes = (req, res) => {
-  store.clashes = store.clashes.map(c => ({ ...c, status: "resolved" }));
+  store.clashes = store.clashes.map(c => ({ ...c, status: "resolved", resolvedBy: "manual" }));
   res.json({ message: "All clashes resolved", total: store.clashes.length });
 };
 
-// POST /api/timetable/publish  — admin publishes timetable to students
+
+
+// ── NEW: POST /api/timetable/auto-schedule ──────────────────────────────────
+const autoScheduleTimetable = (req, res) => {
+  if (!store.entries.length)
+    return res.status(400).json({ error: "No timetable to schedule. Upload first." });
+
+  const resolvedEntries = autoSchedule(store.entries);
+  const remainingClashes = detectClashes(resolvedEntries);
+  
+  // Apply changes to store
+  store.entries = resolvedEntries;
+  store.clashes = remainingClashes;
+
+  res.json({
+    message: "Auto-scheduler completed.",
+    clashesRemaining: remainingClashes.length,
+    totalEntries: resolvedEntries.length
+  });
+};
+
+
+// ── POST /api/timetable/publish ───────────────────────────────────────────────
 const publishTimetable = (req, res) => {
   if (!store.entries.length)
     return res.status(400).json({ error: "No timetable to publish. Upload first." });
@@ -99,17 +168,17 @@ const publishTimetable = (req, res) => {
   res.json({ message: "Timetable published successfully! Students can now view it.", publishedAt: store.publishedAt });
 };
 
-// GET /api/timetable/published  — students check if timetable is published
+// ── GET /api/timetable/published ─────────────────────────────────────────────
 const getPublishedStatus = (req, res) => {
   res.json({
-    published:   store.published,
-    publishedAt: store.publishedAt || null,
-    fileName:    store.fileName,
+    published:    store.published,
+    publishedAt:  store.publishedAt || null,
+    fileName:     store.fileName,
     totalEntries: store.entries.length,
   });
 };
 
-// GET /api/timetable/student?batch=A1  — student gets their timetable
+// ── GET /api/timetable/student?batch=A1 ──────────────────────────────────────
 const getStudentTimetable = (req, res) => {
   if (!store.published)
     return res.status(403).json({ error: "Timetable has not been published yet by admin." });
@@ -121,7 +190,7 @@ const getStudentTimetable = (req, res) => {
   res.json({ batch, entries, total: entries.length });
 };
 
-// GET /api/timetable/download/full  — admin downloads full resolved timetable
+// ── GET /api/timetable/download/full ─────────────────────────────────────────
 const downloadFullTimetable = async (req, res) => {
   try {
     if (!store.entries.length)
@@ -137,7 +206,7 @@ const downloadFullTimetable = async (req, res) => {
   }
 };
 
-// GET /api/timetable/download/batch/:batch  — student downloads their batch timetable
+// ── GET /api/timetable/download/batch/:batch ─────────────────────────────────
 const downloadBatchTimetable = async (req, res) => {
   try {
     if (!store.published)
@@ -160,6 +229,7 @@ module.exports = {
   getClashes,
   resolveClash,
   resolveAllClashes,
+  autoScheduleTimetable,
   publishTimetable,
   getPublishedStatus,
   getStudentTimetable,
