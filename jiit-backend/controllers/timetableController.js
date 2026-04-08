@@ -20,13 +20,16 @@ let store = {
 // ── POST /api/timetable/upload ────────────────────────────────────────────────
 const uploadTimetable = async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    if (!req.files || req.files.length === 0) return res.status(400).json({ error: "No files uploaded" });
 
-    const wb   = XLSX.read(req.file.buffer, { type: "buffer" });
-    const ws   = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+    let entries = [];
+    for (const file of req.files) {
+      const wb   = XLSX.read(file.buffer, { type: "buffer" });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+      entries.push(...parseMatrixSheet(rows));
+    }
 
-    const entries = parseMatrixSheet(rows);
     const clashes = detectClashes(entries);
 
     // Attach CSP solver suggestions to each clash instantly
@@ -41,7 +44,7 @@ const uploadTimetable = async (req, res) => {
     store.entries    = entries;
     store.clashes    = clashes;
     store.published  = false;
-    store.fileName   = req.file.originalname;
+    store.fileName   = req.files.map(f => f.originalname).join(", ");
     store.uploadedAt = new Date();
 
     res.json({
@@ -127,6 +130,40 @@ const resolveClash = (req, res) => {
 const resolveAllClashes = (req, res) => {
   store.clashes = store.clashes.map(c => ({ ...c, status: "resolved", resolvedBy: "manual" }));
   res.json({ message: "All clashes resolved", total: store.clashes.length });
+};
+
+// ── NEW: PATCH /api/timetable/entries/move ────────────────────────────────────
+const moveEntry = (req, res) => {
+  const { raw, day, time, subject, newDay, newTime } = req.body;
+  if (!raw || !newDay || !newTime) return res.status(400).json({ error: "Missing required fields" });
+
+  let entryUpdated = false;
+  
+  // Find the exact entry in the store and update its day/time
+  for (let e of store.entries) {
+    if (e.raw === raw && e.day === day && e.time === time && e.subject === subject) {
+      e.day = newDay;
+      e.time = newTime;
+      entryUpdated = true;
+      break; 
+    }
+  }
+
+  if (!entryUpdated) return res.status(404).json({ error: "Entry not found" });
+
+  // Recalculate clashes
+  const clashes = detectClashes(store.entries);
+
+  // Attach CSP solver suggestions to new clashes so the UI can still show them
+  clashes.forEach(clash => {
+    if (clash.entries.length > 0) {
+      clash.suggestedSlots = suggestSlots(clash.entries[0], store.entries);
+    }
+  });
+
+  store.clashes = clashes;
+
+  res.json({ message: "Entry moved successfully", clashes: store.clashes.length });
 };
 
 
@@ -229,6 +266,7 @@ module.exports = {
   getClashes,
   resolveClash,
   resolveAllClashes,
+  moveEntry,
   autoScheduleTimetable,
   publishTimetable,
   getPublishedStatus,

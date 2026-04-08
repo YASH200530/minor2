@@ -1,7 +1,13 @@
 import { useState, useRef } from "react";
 import {
+  Upload as UploadIcon, AlertTriangle, Calendar, CheckCircle, Rocket,
+  Download as DownloadIcon, XCircle, FileSpreadsheet, Users,
+  GraduationCap, Building2, Lightbulb, Wrench, BarChart2, LogOut
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
   uploadTimetable, getEntries, getClashes,
-  resolveClash, resolveAllClashes,
+  resolveClash, resolveAllClashes, moveEntry,
   publishTimetable, downloadFullTimetable,
 } from "../utils/api";
 import TimetableGrid from "../components/TimetableGrid";
@@ -42,12 +48,14 @@ export default function AdminPortal({ user, onLogout }) {
     } catch (e) { console.error(e); }
   };
 
-  const processFile = async (file) => {
-    if (!file) return;
-    setFileName(file.name);
+  const processFiles = async (files) => {
+    if (!files || files.length === 0) return;
+    const fileArray = Array.from(files);
+    const nameStr = fileArray.map(f => f.name).join(", ");
+    setFileName(nameStr.length > 40 ? `${fileArray.length} files selected` : nameStr);
     setAnalyzing(true);
     try {
-      const result = await uploadTimetable(file);
+      const result = await uploadTimetable(fileArray);
       setStats(result);
       const [entriesData, clashesData] = await Promise.all([getEntries(), getClashes()]);
       setEntries(entriesData.entries);
@@ -97,6 +105,20 @@ export default function AdminPortal({ user, onLogout }) {
     } catch (e) { showToast("❌ " + e.message, "error"); }
   };
 
+  const handleMoveEntry = async (dragData, newDay, newTime) => {
+    try {
+      if (dragData.day === newDay && dragData.time === newTime) return; // No change
+      setAnalyzing(true);
+      await moveEntry(dragData, newDay, newTime);
+      await refreshData();
+      showToast(`🔄 Moved ${dragData.subject} to ${newDay} ${newTime}`, "success");
+    } catch (e) {
+      showToast("❌ " + e.message, "error");
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
 
 
   const handlePublish = async () => {
@@ -125,9 +147,9 @@ export default function AdminPortal({ user, onLogout }) {
   };
 
   const navItems = [
-    { id: "upload",  icon: "⬆️", label: "Upload Timetable"                  },
-    { id: "clashes", icon: "⚠️", label: "Clash Detection", badge: pending   },
-    { id: "view",    icon: "📅", label: "View Timetable"                    },
+    { id: "upload",  icon: <UploadIcon size={16} />, label: "Upload Timetable"                  },
+    { id: "clashes", icon: <AlertTriangle size={16} />, label: "Clash Detection", badge: pending   },
+    { id: "view",    icon: <Calendar size={16} />, label: "View Timetable"                    },
   ];
 
   return (
@@ -167,7 +189,7 @@ export default function AdminPortal({ user, onLogout }) {
               ×
             </button>
             <h3 style={{ fontSize: 18, fontWeight: 700, color: "#fff", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ color: "#a855f7" }}>✨</span> Resolution Options
+              <span style={{ color: "#a855f7" }}><Lightbulb size={20} /></span> Resolution Options
             </h3>
             
             <p style={{ fontSize: 13, color: "#9ca3af", marginBottom: 20 }}>
@@ -234,7 +256,9 @@ export default function AdminPortal({ user, onLogout }) {
       <aside style={{ width: 218, minWidth: 218, background: "#0d0d0d", borderRight: "1px solid rgba(255,255,255,.05)", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "16px 14px", borderBottom: "1px solid rgba(255,255,255,.05)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-            <div style={{ width: 34, height: 34, background: "#1e1a3a", border: "1px solid rgba(124,58,237,.4)", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>📅</div>
+            <div style={{ width: 34, height: 34, background: "#1e1a3a", border: "1px solid rgba(124,58,237,.4)", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", color: "#a855f7" }}>
+              <Calendar size={18} />
+            </div>
             <div>
               <div style={{ fontWeight: 700, fontSize: 12, color: "#fff" }}>JIIT SmartSched</div>
               <div style={{ fontSize: 10, color: "#6b7280" }}>Admin Portal</div>
@@ -260,7 +284,7 @@ export default function AdminPortal({ user, onLogout }) {
               onClick={handlePublish}
               disabled={publishing || published}
             >
-              {publishing ? "Publishing…" : published ? "✅ Published" : "🚀 Publish to Students"}
+              {publishing ? "Publishing…" : published ? <><CheckCircle size={14}/> Published</> : <><Rocket size={14}/> Publish to Students</>}
             </button>
             <button
               className="btn btn-green"
@@ -268,7 +292,7 @@ export default function AdminPortal({ user, onLogout }) {
               onClick={handleDownload}
               disabled={downloading}
             >
-              {downloading ? "Generating…" : "📥 Download Excel"}
+              {downloading ? "Generating…" : <><DownloadIcon size={14}/> Download Excel</>}
             </button>
           </div>
         )}
@@ -306,19 +330,26 @@ export default function AdminPortal({ user, onLogout }) {
         </header>
 
         <main style={{ flex: 1, overflowY: "auto", padding: 24 }}>
-
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={page}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
           {/* ── UPLOAD ─────────────────────────────────────── */}
           {page === "upload" && (
-            <div className="fadein">
+            <div className="glass-panel" style={{ padding: 24, borderRadius: 20 }}>
               <div
                 className={`upload-zone${drag ? " drag" : ""}`}
                 style={{ padding: "90px 40px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}
                 onClick={() => !analyzing && fileRef.current.click()}
                 onDragOver={e => { e.preventDefault(); setDrag(true); }}
                 onDragLeave={() => setDrag(false)}
-                onDrop={e => { e.preventDefault(); setDrag(false); processFile(e.dataTransfer.files[0]); }}
+                onDrop={e => { e.preventDefault(); setDrag(false); processFiles(e.dataTransfer.files); }}
               >
-                <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={e => processFile(e.target.files[0])}/>
+                <input ref={fileRef} type="file" multiple accept=".xlsx,.xls" style={{ display: "none" }} onChange={e => processFiles(e.target.files)}/>
                 {analyzing ? (
                   <>
                     <div style={{ width: 68, height: 68, background: "#1e1a3a", borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
@@ -332,21 +363,23 @@ export default function AdminPortal({ user, onLogout }) {
                   </>
                 ) : (
                   <>
-                    <div style={{ width: 76, height: 76, background: "#1e1a3a", border: "1px solid rgba(124,58,237,.3)", borderRadius: 22, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 34, marginBottom: 20, animation: "float 3.5s ease infinite" }}>📊</div>
+                    <div style={{ width: 76, height: 76, background: "#1e1a3a", border: "1px solid rgba(124,58,237,.3)", borderRadius: 22, display: "flex", alignItems: "center", justifyContent: "center", color: "#a855f7", marginBottom: 20, animation: "float 3.5s ease infinite" }}>
+                      <BarChart2 size={34}/>
+                    </div>
                     <h3 style={{ fontSize: 22, fontWeight: 700, color: "#fff", marginBottom: 8 }}>Upload Timetable Excel</h3>
-                    <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>Drag & drop your .xlsx file or click to browse</p>
-                    <button className="btn btn-purple" style={{ fontSize: 14, padding: "12px 28px" }} onClick={e => { e.stopPropagation(); fileRef.current.click(); }}>
-                      📂 Choose Excel File
+                    <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>Drag & drop your .xlsx files or click to browse</p>
+                    <button className="btn btn-purple" style={{ fontSize: 14, padding: "12px 28px", display: "flex", alignItems: "center", gap: 8 }} onClick={e => { e.stopPropagation(); fileRef.current.click(); }}>
+                      <FileSpreadsheet size={16}/> Choose Excel Files
                     </button>
                   </>
                 )}
               </div>
 
-              <div className="card" style={{ padding: 20, marginTop: 22 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#fff", marginBottom: 14 }}>🚀 Automated Workflow</div>
+              <div className="glass-panel" style={{ padding: 20, marginTop: 22, borderRadius: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#fff", marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}><Rocket size={16}/> Automated Workflow</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
                   {[
-                    ["1. Upload",   "Drop .xlsx file",         "Backend parses all entries"],
+                    ["1. Upload",   "Drop .xlsx files",         "Backend parses all entries"],
                     ["2. Resolve Clashes", "Review constraints", "CSP Engine suggests fixes"],
                     ["3. Publish",  "Students can view",       "They can download it"],
                   ].map(([step, title, desc]) => (
@@ -363,12 +396,12 @@ export default function AdminPortal({ user, onLogout }) {
 
           {/* ── CLASHES ────────────────────────────────────── */}
           {page === "clashes" && (
-            <div className="fadein">
+            <div>
               {!entries.length ? (
-                <div style={{ textAlign: "center", padding: "80px 20px" }}>
-                  <div style={{ fontSize: 48, marginBottom: 16 }}>📭</div>
+                <div className="glass-panel" style={{ textAlign: "center", padding: "80px 20px", borderRadius: 20 }}>
+                  <div style={{ color: "#6b7280", marginBottom: 16, display: "flex", justifyContent: "center" }}><FileSpreadsheet size={48} /></div>
                   <h3 style={{ color: "#fff", marginBottom: 8, fontSize: 18 }}>No Timetable Uploaded Yet</h3>
-                  <button className="btn btn-purple" onClick={() => setPage("upload")}>⬆️ Upload Timetable</button>
+                  <button className="btn btn-purple" style={{display:"inline-flex", alignItems:"center", gap:6}} onClick={() => setPage("upload")}><UploadIcon size={14}/> Upload Timetable</button>
                 </div>
               ) : (
                 <>
@@ -425,7 +458,7 @@ export default function AdminPortal({ user, onLogout }) {
 
                     {clashes.length === 0 ? (
                       <div style={{ padding: "70px 20px", textAlign: "center" }}>
-                        <div style={{ fontSize: 48, marginBottom: 14 }}>✅</div>
+                        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14, color: "#4ade80" }}><CheckCircle size={48} /></div>
                         <h3 style={{ color: "#4ade80", fontSize: 18, marginBottom: 6 }}>No Clashes Detected!</h3>
                         <p style={{ color: "#6b7280", fontSize: 13 }}>Your timetable is clean.</p>
                       </div>
@@ -518,15 +551,15 @@ export default function AdminPortal({ user, onLogout }) {
 
           {/* ── VIEW ───────────────────────────────────────── */}
           {page === "view" && (
-            <div className="fadein">
+            <div>
               {!entries.length ? (
-                <div style={{ textAlign: "center", padding: "80px 20px" }}>
-                  <div style={{ fontSize: 48, marginBottom: 16 }}>📭</div>
+                <div className="glass-panel" style={{ textAlign: "center", padding: "80px 20px", borderRadius: 20 }}>
+                  <div style={{ color: "#6b7280", marginBottom: 16, display: "flex", justifyContent: "center" }}><FileSpreadsheet size={48} /></div>
                   <h3 style={{ color: "#fff", marginBottom: 8 }}>No Timetable Uploaded Yet</h3>
-                  <button className="btn btn-purple" onClick={() => setPage("upload")}>⬆️ Upload Timetable</button>
+                  <button className="btn btn-purple" style={{display:"inline-flex", alignItems:"center", gap:6}} onClick={() => setPage("upload")}><UploadIcon size={14}/> Upload Timetable</button>
                 </div>
               ) : (
-                <div className="card" style={{ padding: 20 }}>
+                <div className="glass-panel" style={{ padding: 20, borderRadius: 16 }}>
                   <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
                       <h3 style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Full Timetable — All Batches</h3>
@@ -536,12 +569,14 @@ export default function AdminPortal({ user, onLogout }) {
                       {downloading ? "Generating…" : "📥 Download Excel"}
                     </button>
                   </div>
-                  <TimetableGrid entries={entries} clashes={clashes}/>
+                  <TimetableGrid entries={entries} clashes={clashes} onMoveEntry={handleMoveEntry} />
                 </div>
               )}
             </div>
           )}
 
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
     </div>

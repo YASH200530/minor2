@@ -173,7 +173,7 @@ export default function StudentPortal({ user, onLogout }) {
                   </div>
                 </div>
                 <div style={{ padding:16 }}>
-                  <TimetableGrid entries={entries} batchFilter={batch}/>
+                  <TimetableGrid entries={entries} batchFilter={batch} isStudent={true}/>
                 </div>
               </div>
             )}

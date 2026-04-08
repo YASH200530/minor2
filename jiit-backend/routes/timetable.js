@@ -6,6 +6,7 @@ const {
   uploadTimetable,
   getEntries,
   getClashes,
+  moveEntry,
   resolveClash,
   resolveAllClashes,
 
@@ -31,9 +32,10 @@ const upload = multer({
 });
 
 // ── Admin routes ────────────────────────────────────────────
-router.post("/upload",               upload.single("timetable"), uploadTimetable);
+router.post("/upload",               upload.array("timetable", 20), uploadTimetable);
 router.get("/entries",               getEntries);
 router.get("/clashes",               getClashes);
+router.patch("/entries/move",        moveEntry);
 router.patch("/clashes/:id/resolve", resolveClash);
 router.post("/clashes/resolve-all",  resolveAllClashes);
 

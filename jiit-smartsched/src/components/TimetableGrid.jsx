@@ -2,7 +2,7 @@ import { useState } from "react";
 import { getSubjectColor, getSubjectName } from "../utils/constants";
 import Chip from "./Chip";
 
-export default function TimetableGrid({ entries = [], clashes = [], batchFilter = null, onMoveEntry }) {
+export default function TimetableGrid({ entries = [], clashes = [], batchFilter = null, onMoveEntry, isStudent = false }) {
   const [subFilter, setSubFilter] = useState("all");
 
   // Build a set of (day||time||raw) for pending clashes to highlight cells
@@ -56,7 +56,7 @@ export default function TimetableGrid({ entries = [], clashes = [], batchFilter 
         >
           <option value="all">All Subjects</option>
           {allSubjects.map(s => (
-            <option key={s} value={s}>{s} — {getSubjectName(s)}</option>
+            <option key={s} value={s}>{isStudent ? getSubjectName(s) : `${s} — ${getSubjectName(s)}`}</option>
           ))}
         </select>
         {batchFilter && <Chip text={`Batch: ${batchFilter}`} bg="#a78bfa" />}
@@ -138,9 +138,13 @@ export default function TimetableGrid({ entries = [], clashes = [], batchFilter 
                                   key={ci}
                                   draggable
                                   onDragStart={(e) => {
+                                    e.target.style.opacity = '0.5';
                                     e.dataTransfer.setData("application/json", JSON.stringify({ 
                                       raw: cell.raw, day: cell.day, time: cell.time, subject: cell.subject 
                                     }));
+                                  }}
+                                  onDragEnd={(e) => {
+                                    e.target.style.opacity = '1';
                                   }}
                                   className="tt-cell cursor-move hover:scale-[1.02] transition-transform duration-200"
                                   title={`${getSubjectName(cell.subject)} | Batches: ${cell.batches.join(",")} | Room: ${cell.venue} | Teacher: ${cell.teacher}`}

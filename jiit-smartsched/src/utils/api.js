@@ -15,9 +15,12 @@ export function downloadBlob(blob, filename) {
 
 // ── Admin ────────────────────────────────────────────────────
 
-export async function uploadTimetable(file) {
+export async function uploadTimetable(files) {
   const fd = new FormData();
-  fd.append("timetable", file);
+  const fileArray = Array.isArray(files) ? files : Array.from(files);
+  for (let file of fileArray) {
+    fd.append("timetable", file);
+  }
   const res = await fetch(`${BASE}/upload`, { method: "POST", body: fd });
   if (!res.ok) throw new Error((await res.json()).error);
   return res.json();
@@ -47,6 +50,16 @@ export async function resolveClash(index, options = {}) {
 
 export async function resolveAllClashes() {
   const res = await fetch(`${BASE}/clashes/resolve-all`, { method: "POST" });
+  if (!res.ok) throw new Error((await res.json()).error);
+  return res.json();
+}
+
+export async function moveEntry(dragData, newDay, newTime) {
+  const res = await fetch(`${BASE}/entries/move`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...dragData, newDay, newTime })
+  });
   if (!res.ok) throw new Error((await res.json()).error);
   return res.json();
 }
