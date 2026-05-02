@@ -2,7 +2,15 @@ import { useState } from "react";
 import { getSubjectColor, getSubjectName } from "../utils/constants";
 import Chip from "./Chip";
 
-export default function TimetableGrid({ entries = [], clashes = [], batchFilter = null, onMoveEntry, isStudent = false }) {
+export default function TimetableGrid({
+  entries = [],
+  clashes = [],
+  batchFilter = null,
+  onMoveEntry,
+  isStudent = false,
+  orderedDays: propDays = [],
+  orderedTimes: propTimes = [],
+}) {
   const [subFilter, setSubFilter] = useState("all");
 
   // Build a set of (day||time||raw) for pending clashes to highlight cells
@@ -13,25 +21,44 @@ export default function TimetableGrid({ entries = [], clashes = [], batchFilter 
 
   const allSubjects = [...new Set(entries.map(e => e.subject))].sort();
 
-  // Dynamically extract unique days and times from the actual data so 
-  // it seamlessly adapts to ANY excel file format (like "MON" or "Monday", "8-9AM" or "9:00")
-  const dynamicDays = [...new Set(entries.map(e => e.day))].filter(Boolean);
+  // ── Day order: use exact Excel row order when available ──────────────────
+  const dynamicDays = propDays.length > 0
+    ? propDays.filter(d => entries.some(e => e.day === d)) // only include days that have entries
+    : [...new Set(entries.map(e => e.day))].filter(Boolean);
 
+  // ── Time order: use exact Excel column order when available ──────────────
+  // Fallback: sort by parsing the first number found in the string
   const parseTime = (timeStr) => {
+    if (!timeStr) return 0;
+    const up = timeStr.toUpperCase();
+    if (up.includes("LUNCH")) return 12.5;
+    // Try HH:MM format first
+    const colonMatch = timeStr.match(/(\d{1,2}):(\d{2})/);
+    if (colonMatch) {
+      let h = parseInt(colonMatch[1], 10);
+      const m = parseInt(colonMatch[2], 10);
+      if (up.includes("PM") && h < 12) h += 12;
+      if (up.includes("AM") && h === 12) h = 0;
+      return h + m / 60;
+    }
+    // Try plain digit range like "8-9", "11-12PM", "1-2PM"
     const numMatch = timeStr.match(/\d+/);
     if (!numMatch) return 0;
     let hour = parseInt(numMatch[0], 10);
-    // Adjust for PM
-    if (timeStr.toUpperCase().includes("PM") && hour < 12) hour += 12;
-    // Assume 1 to 7 are PM (13:00 - 19:00) in university contexts if AM isn't specified
-    if (!timeStr.toUpperCase().includes("AM") && hour >= 1 && hour <= 7) hour += 12;
-    if (timeStr.toUpperCase().includes("LUNCH")) return 12.5; 
+    if (up.includes("AM")) return hour; // explicit AM — trust it
+    if (up.includes("PM") && hour < 12) {
+      // "11-12PM": PM refers to end of range; start hour >=8 means it's morning
+      if (hour >= 8) return hour; // e.g. 11-12PM → 11 (AM)
+      hour += 12;                  // e.g. 1-2PM → 13
+    }
+    // No AM/PM: heuristic — hours 1-7 are PM slots (1PM–7PM), 8-12 are AM
+    if (hour >= 1 && hour <= 7) hour += 12;
     return hour;
   };
 
-  const dynamicTimes = [...new Set(entries.map(e => e.time))]
-    .filter(Boolean)
-    .sort((a, b) => parseTime(a) - parseTime(b));
+  const dynamicTimes = propTimes.length > 0
+    ? propTimes.filter(t => entries.some(e => e.time === t))
+    : [...new Set(entries.map(e => e.time))].filter(Boolean).sort((a, b) => parseTime(a) - parseTime(b));
 
   // Build grid: key = "Day||Time" → array of entries
   const grid = {};
@@ -56,7 +83,7 @@ export default function TimetableGrid({ entries = [], clashes = [], batchFilter 
         >
           <option value="all">All Subjects</option>
           {allSubjects.map(s => (
-            <option key={s} value={s}>{isStudent ? getSubjectName(s) : `${s} — ${getSubjectName(s)}`}</option>
+            <option key={s} value={s}>{getSubjectName(s)}</option>
           ))}
         </select>
         {batchFilter && <Chip text={`Batch: ${batchFilter}`} bg="#a78bfa" />}
@@ -168,7 +195,7 @@ export default function TimetableGrid({ entries = [], clashes = [], batchFilter 
                                       {cell.type === "L" ? "Lec" : cell.type === "T" ? "Tut" : "Lab"}
                                     </span>
                                     <span style={{ fontSize:10, fontWeight:700, color: isClash ? "#f87171" : col }}>
-                                      {cell.subject}
+                                      {getSubjectName(cell.subject)}
                                     </span>
                                   </div>
                                   <div style={{ fontSize:9, color:"rgba(255,255,255,.55)", marginBottom:1 }}>

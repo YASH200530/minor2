@@ -12,6 +12,10 @@ const {
 
   autoScheduleTimetable,
   publishTimetable,
+  getTimetableVersions,
+  getVersionEntries,
+  restoreTimetable,
+  deleteTimetable,
   getPublishedStatus,
   getStudentTimetable,
   downloadFullTimetable,
@@ -31,21 +35,27 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-// ── Admin routes ────────────────────────────────────────────
-router.post("/upload",               upload.array("timetable", 20), uploadTimetable);
-router.get("/entries",               getEntries);
-router.get("/clashes",               getClashes);
-router.patch("/entries/move",        moveEntry);
-router.patch("/clashes/:id/resolve", resolveClash);
-router.post("/clashes/resolve-all",  resolveAllClashes);
-
-router.post("/auto-schedule",        autoScheduleTimetable);
-router.post("/publish",              publishTimetable);
-router.get("/download/full",         downloadFullTimetable);
-
-// ── Student routes ──────────────────────────────────────────
+// ── Static routes MUST come before /:id wildcard ────────────
 router.get("/published",             getPublishedStatus);
 router.get("/student",               getStudentTimetable);
-router.get("/download/batch/:batch", downloadBatchTimetable);
+
+// ── Admin routes ─────────────────────────────────────────────
+router.post("/upload",               upload.array("timetable", 20), uploadTimetable);
+router.get("/versions",              getTimetableVersions);
+
+router.get("/:id/entries",               getEntries);
+router.get("/:id/clashes",               getClashes);
+router.patch("/:id/entries/move",        moveEntry);
+router.patch("/:id/clashes/:clashId/resolve", resolveClash);
+router.post("/:id/clashes/resolve-all",  resolveAllClashes);
+
+router.post("/:id/auto-schedule",        autoScheduleTimetable);
+router.post("/:id/publish",              publishTimetable);
+router.get("/:id/download/full",         downloadFullTimetable);
+router.get("/:id/download/batch/:batch", downloadBatchTimetable);
+
+router.get("/:id",                   getVersionEntries);
+router.post("/:id/restore",          restoreTimetable);
+router.delete("/:id",                deleteTimetable);
 
 module.exports = router;

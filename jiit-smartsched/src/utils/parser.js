@@ -6,10 +6,10 @@ export function parseEntryRaw(raw) {
   const m = raw.match(/^([LTP])([\w,]+)\((\w+)\)-([^/\s,]+)\/(.+)$/);
   if (!m) return null;
   return {
-    type:    m[1],                                          // L / T / P
+    type: m[1],                                          // L / T / P
     batches: m[2].split(",").map(b => b.trim()).filter(Boolean),
     subject: m[3],
-    venue:   m[4],
+    venue: m[4],
     teacher: m[5].trim(),
     raw,
   };
@@ -18,12 +18,12 @@ export function parseEntryRaw(raw) {
 // Parses all rows from sheet_to_json(ws, {header:1})
 export function parseTimetableSheet(rows) {
   const TIME_MAP = {
-    1:"9:00", 2:"10:00", 3:"11:00", 4:"LUNCH",
-    5:"1:00", 6:"2:00",  7:"3:00",  8:"4:00",
+    1: "9:00", 2: "10:00", 3: "11:00", 4: "12", 5: "LUNCH",
+    6: "1:00", 7: "2:00", 8: "3:00", 9: "4:00",
   };
   const DAY_MAP = {
-    MON:"Monday", TUE:"Tuesday", WED:"Wednesday",
-    THU:"Thursday", FRI:"Friday", SAT:"Saturday",
+    MON: "Monday", TUE: "Tuesday", WED: "Wednesday",
+    THU: "Thursday", FRI: "Friday", SAT: "Saturday",
   };
 
   const entries = [];

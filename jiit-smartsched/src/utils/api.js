@@ -15,8 +15,9 @@ export function downloadBlob(blob, filename) {
 
 // ── Admin ────────────────────────────────────────────────────
 
-export async function uploadTimetable(files) {
+export async function uploadTimetable(files, title) {
   const fd = new FormData();
+  if (title) fd.append("title", title);
   const fileArray = Array.isArray(files) ? files : Array.from(files);
   for (let file of fileArray) {
     fd.append("timetable", file);
@@ -26,20 +27,20 @@ export async function uploadTimetable(files) {
   return res.json();
 }
 
-export async function getEntries() {
-  const res = await fetch(`${BASE}/entries`);
+export async function getEntries(id) {
+  const res = await fetch(`${BASE}/${id}/entries`);
   if (!res.ok) throw new Error((await res.json()).error);
   return res.json();
 }
 
-export async function getClashes() {
-  const res = await fetch(`${BASE}/clashes`);
+export async function getClashes(id) {
+  const res = await fetch(`${BASE}/${id}/clashes`);
   if (!res.ok) throw new Error((await res.json()).error);
   return res.json();
 }
 
-export async function resolveClash(index, options = {}) {
-  const res = await fetch(`${BASE}/clashes/${index}/resolve`, { 
+export async function resolveClash(id, index, options = {}) {
+  const res = await fetch(`${BASE}/${id}/clashes/${index}/resolve`, { 
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(options)
@@ -48,14 +49,14 @@ export async function resolveClash(index, options = {}) {
   return res.json();
 }
 
-export async function resolveAllClashes() {
-  const res = await fetch(`${BASE}/clashes/resolve-all`, { method: "POST" });
+export async function resolveAllClashes(id) {
+  const res = await fetch(`${BASE}/${id}/clashes/resolve-all`, { method: "POST" });
   if (!res.ok) throw new Error((await res.json()).error);
   return res.json();
 }
 
-export async function moveEntry(dragData, newDay, newTime) {
-  const res = await fetch(`${BASE}/entries/move`, {
+export async function moveEntry(id, dragData, newDay, newTime) {
+  const res = await fetch(`${BASE}/${id}/entries/move`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...dragData, newDay, newTime })
@@ -64,18 +65,35 @@ export async function moveEntry(dragData, newDay, newTime) {
   return res.json();
 }
 
-
-export async function publishTimetable() {
-  const res = await fetch(`${BASE}/publish`, { method: "POST" });
+export async function publishTimetable(id) {
+  const res = await fetch(`${BASE}/${id}/publish`, { method: "POST" });
   if (!res.ok) throw new Error((await res.json()).error);
   return res.json();
 }
 
-export async function downloadFullTimetable() {
-  const res = await fetch(`${BASE}/download/full`);
+export async function getVersions() {
+  const res = await fetch(`${BASE}/versions`);
+  if (!res.ok) throw new Error((await res.json()).error);
+  return res.json();
+}
+
+export async function restoreVersion(id) {
+  const res = await fetch(`${BASE}/${id}/restore`, { method: "POST" });
+  if (!res.ok) throw new Error((await res.json()).error);
+  return res.json();
+}
+
+export async function deleteVersion(id) {
+  const res = await fetch(`${BASE}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error((await res.json()).error);
+  return res.json();
+}
+
+export async function downloadFullTimetable(id) {
+  const res = await fetch(`${BASE}/${id}/download/full`);
   if (!res.ok) throw new Error((await res.json()).error);
   const blob = await res.blob();
-  downloadBlob(blob, "JIIT_Timetable_Resolved.xlsx");
+  downloadBlob(blob, `JIIT_Timetable_${id}.xlsx`);
 }
 
 // ── Student ──────────────────────────────────────────────────
@@ -86,8 +104,9 @@ export async function getPublishedStatus() {
   return res.json();
 }
 
-export async function getStudentTimetable(batch) {
-  const res = await fetch(`${BASE}/student?batch=${batch}`);
+export async function getStudentTimetable(batch, versionId = "active") {
+  const url = versionId !== "active" ? `${BASE}/student?batch=${batch}&versionId=${versionId}` : `${BASE}/student?batch=${batch}`;
+  const res = await fetch(url);
   if (!res.ok) throw new Error((await res.json()).error);
   return res.json();
 }

@@ -1,26 +1,32 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Upload as UploadIcon, AlertTriangle, Calendar, CheckCircle, Rocket,
   Download as DownloadIcon, XCircle, FileSpreadsheet, Users,
-  GraduationCap, Building2, Lightbulb, Wrench, BarChart2, LogOut
+  GraduationCap, Building2, Lightbulb, Wrench, BarChart2, LogOut, Database
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   uploadTimetable, getEntries, getClashes,
   resolveClash, resolveAllClashes, moveEntry,
   publishTimetable, downloadFullTimetable,
+  getVersions, restoreVersion, deleteVersion
 } from "../utils/api";
 import TimetableGrid from "../components/TimetableGrid";
 import StatCard      from "../components/StatCard";
-import Chip          from "../components/Chip";
+import Chip from "../components/Chip";
+import { getSubjectName } from "../utils/constants";
 
 
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function AdminPortal({ user, onLogout }) {
-  const [page,        setPage]       = useState("upload");
+  const [page,        setPage]       = useState("archives");
   const [entries,     setEntries]    = useState([]);
   const [clashes,     setClashes]    = useState([]);
+  const [orderedDays,  setOrderedDays]  = useState([]);
+  const [orderedTimes, setOrderedTimes] = useState([]);
+  const [timetableTitle, setTimetableTitle] = useState("");
+  const [activeTimetable, setActiveTimetable] = useState(null);
   const [stats,       setStats]      = useState(null);
   const [fileName,    setFileName]   = useState("");
   const [analyzing,   setAnalyzing]  = useState(false);
@@ -30,6 +36,7 @@ export default function AdminPortal({ user, onLogout }) {
   const [drag,        setDrag]       = useState(false);
   const [toast,       setToast]      = useState(null);
   const [resolveModalIdx, setResolveModalIdx] = useState(null);
+  const [versions,    setVersions]   = useState([]);
   const fileRef = useRef();
 
   const pending  = clashes.filter(c => c.status === "pending").length;
@@ -40,29 +47,48 @@ export default function AdminPortal({ user, onLogout }) {
     setTimeout(() => setToast(null), 4000);
   };
 
-  const refreshData = async () => {
+  const refreshData = async (id) => {
+    const targetId = id || activeTimetable?._id;
+    if (!targetId) return;
     try {
-      const [entriesData, clashesData] = await Promise.all([getEntries(), getClashes()]);
+      const [entriesData, clashesData] = await Promise.all([getEntries(targetId), getClashes(targetId)]);
       setEntries(entriesData.entries);
       setClashes(clashesData.clashes);
+      if (entriesData.orderedDays?.length)  setOrderedDays(entriesData.orderedDays);
+      if (entriesData.orderedTimes?.length) setOrderedTimes(entriesData.orderedTimes);
+      setActiveTimetable(prev => ({...prev, status: entriesData.status}));
+      setPublished(entriesData.status === "published");
     } catch (e) { console.error(e); }
   };
 
   const processFiles = async (files) => {
     if (!files || files.length === 0) return;
+    if (!timetableTitle.trim()) {
+      showToast("❌ Please enter a Timetable Title before uploading.", "error");
+      return;
+    }
     const fileArray = Array.from(files);
     const nameStr = fileArray.map(f => f.name).join(", ");
     setFileName(nameStr.length > 40 ? `${fileArray.length} files selected` : nameStr);
     setAnalyzing(true);
     try {
-      const result = await uploadTimetable(fileArray);
+      const result = await uploadTimetable(fileArray, timetableTitle);
       setStats(result);
-      const [entriesData, clashesData] = await Promise.all([getEntries(), getClashes()]);
-      setEntries(entriesData.entries);
-      setClashes(clashesData.clashes);
+      const newTimetable = { _id: result.id, title: timetableTitle, fileName: nameStr, status: "draft" };
+      
+      // Use parsed items directly from the rapid API payload. 
+      // Bypasses the 2-4 second delay of refetching the document from MongoDB Atlas.
+      setEntries(result.parsedEntries || []);
+      setClashes(result.parsedClashes || []);
+      if (result.orderedDays?.length)  setOrderedDays(result.orderedDays);
+      if (result.orderedTimes?.length) setOrderedTimes(result.orderedTimes);
+      
+      setActiveTimetable(newTimetable);
       setPublished(false);
       showToast(`✅ Parsed ${result.entries} entries, found ${result.clashes} clashes`);
+      setTimetableTitle("");
       setPage("clashes");
+      handleFetchVersions();
     } catch (err) {
       showToast("❌ " + err.message, "error");
     } finally {
@@ -72,7 +98,7 @@ export default function AdminPortal({ user, onLogout }) {
 
   const handleResolve = async (index) => {
     try {
-      await resolveClash(index);
+      await resolveClash(activeTimetable._id, index);
       await refreshData();
       setResolveModalIdx(null);
     } catch (e) { showToast("❌ " + e.message, "error"); }
@@ -88,7 +114,7 @@ export default function AdminPortal({ user, onLogout }) {
         newValue: slot.type === 'time_change' ? slot.day + " " + slot.time : slot.venue,
         reason: slot.description
       };
-      await resolveClash(idx, { appliedChanges: [change], summary: "CSP Fix: " + slot.description });
+      await resolveClash(activeTimetable._id, idx, { appliedChanges: [change], summary: "CSP Fix: " + slot.description });
       await refreshData();
       setResolveModalIdx(null);
       showToast("✅ Applied CSP suggestion successfully!");
@@ -99,7 +125,7 @@ export default function AdminPortal({ user, onLogout }) {
 
   const handleResolveAll = async () => {
     try {
-      await resolveAllClashes();
+      await resolveAllClashes(activeTimetable._id);
       await refreshData();
       showToast("✅ All clashes resolved manually!");
     } catch (e) { showToast("❌ " + e.message, "error"); }
@@ -109,7 +135,7 @@ export default function AdminPortal({ user, onLogout }) {
     try {
       if (dragData.day === newDay && dragData.time === newTime) return; // No change
       setAnalyzing(true);
-      await moveEntry(dragData, newDay, newTime);
+      await moveEntry(activeTimetable._id, dragData, newDay, newTime);
       await refreshData();
       showToast(`🔄 Moved ${dragData.subject} to ${newDay} ${newTime}`, "success");
     } catch (e) {
@@ -124,7 +150,7 @@ export default function AdminPortal({ user, onLogout }) {
   const handlePublish = async () => {
     setPublishing(true);
     try {
-      await publishTimetable();
+      await publishTimetable(activeTimetable._id);
       setPublished(true);
       showToast("🚀 Timetable published! Students can now view and download it.");
     } catch (err) {
@@ -137,7 +163,7 @@ export default function AdminPortal({ user, onLogout }) {
   const handleDownload = async () => {
     setDownloading(true);
     try {
-      await downloadFullTimetable();
+      await downloadFullTimetable(activeTimetable._id);
       showToast("📥 Download started!");
     } catch (err) {
       showToast("❌ " + err.message, "error");
@@ -146,10 +172,48 @@ export default function AdminPortal({ user, onLogout }) {
     }
   };
 
+  const handleFetchVersions = async () => {
+    try {
+      const data = await getVersions();
+      setVersions(data);
+    } catch (e) { showToast("❌ " + e.message, "error"); }
+  };
+
+  const handleSelectTimetable = (v) => {
+    setActiveTimetable(v);
+    setFileName(v.fileName);
+    refreshData(v._id);
+    setPage("clashes");
+  };
+
+  const handleDelete = async (v) => {
+    if (!window.confirm(`Delete "${v.title}"? This cannot be undone.`)) return;
+    try {
+      await deleteVersion(v._id);
+      showToast(`🗑️ "${v.title}" deleted.`);
+      // If the deleted timetable was active, clear the state
+      if (activeTimetable?._id === v._id) {
+        setActiveTimetable(null);
+        setEntries([]);
+        setClashes([]);
+        setPublished(false);
+      }
+      handleFetchVersions();
+    } catch (e) { showToast("❌ " + e.message, "error"); }
+  };
+
+  if (page === "archives" && versions.length === 0 && !analyzing) {
+    handleFetchVersions();
+  }
+
+  // Reload data when activeTimetable is changed directly
+  useEffect(() => { if (activeTimetable?._id) refreshData(activeTimetable._id); }, [activeTimetable?._id]);
+
   const navItems = [
-    { id: "upload",  icon: <UploadIcon size={16} />, label: "Upload Timetable"                  },
-    { id: "clashes", icon: <AlertTriangle size={16} />, label: "Clash Detection", badge: pending   },
-    { id: "view",    icon: <Calendar size={16} />, label: "View Timetable"                    },
+    { id: "archives", icon: <Database size={16} />, label: "My Timetables" },
+    { id: "upload",  icon: <UploadIcon size={16} />, label: "Upload New"                  },
+    { id: "clashes", icon: <AlertTriangle size={16} />, label: "Clash Detection", badge: activeTimetable ? pending : 0   },
+    { id: "view",    icon: <Calendar size={16} />, label: "Grid View"                    },
   ];
 
   return (
@@ -218,7 +282,7 @@ export default function AdminPortal({ user, onLogout }) {
                       <div style={{ background: "rgba(0,0,0,.25)", borderRadius: 8, padding: 10, marginBottom: 8 }}>
                         <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: .5, color: "#9ca3af", marginBottom: 4 }}>Subject to Move</div>
                         <div style={{ fontSize: 13, color: "#fff", fontWeight: 600, display: "flex", justifyContent: "space-between" }}>
-                          <span>{targetEntry.subject} <span style={{ color: "#a855f7", fontWeight: 400 }}>({targetEntry.batches.join(", ")})</span></span>
+                          <span>{getSubjectName(targetEntry.subject)} <span style={{ color: "#a855f7", fontWeight: 400 }}>({targetEntry.batches.join(", ")})</span></span>
                           <span style={{ fontSize: 11, color: "#6b7280" }}>{clashes[resolveModalIdx].day} @ {clashes[resolveModalIdx].time}</span>
                         </div>
                         <div style={{ fontSize: 11, color: "#d1d5db", marginTop: 2 }}>Teacher: {targetEntry.teacher} · Room: {targetEntry.venue}</div>
@@ -228,7 +292,7 @@ export default function AdminPortal({ user, onLogout }) {
                         <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: .5, color: "#f87171", marginBottom: 4 }}>Clashing With</div>
                         {otherEntries.map((cw, cidx) => (
                           <div key={cidx} style={{ fontSize: 12, color: "#e5e7eb", display: "flex", justifyContent: "space-between", marginTop: cidx===0?0:4 }}>
-                            <span>{cw.subject} <span style={{ color: "#9ca3af" }}>({cw.batches.join(", ")})</span></span>
+                            <span>{getSubjectName(cw.subject)} <span style={{ color: "#9ca3af" }}>({cw.batches.join(", ")})</span></span>
                             <span style={{ fontSize: 11, color: "#d1d5db" }}>{cw.teacher} · {cw.venue}</span>
                           </div>
                         ))}
@@ -314,9 +378,9 @@ export default function AdminPortal({ user, onLogout }) {
             <button className="btn btn-ghost btn-sm" onClick={onLogout} style={{ display: "flex", alignItems: "center", gap: 5 }}>← Back</button>
             <div>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>
-                {page === "upload" ? "Upload Timetable" : page === "clashes" ? "⚠️ Clash Detection" : "📅 Timetable View"}
+                {page === "archives" ? "My Timetables" : page === "upload" ? "Upload Timetable" : page === "clashes" ? "⚠️ Clash Detection" : "📅 Timetable View"}
               </h2>
-              <p style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>B.Tech II Semester Even 2026</p>
+              <p style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>{activeTimetable ? activeTimetable.title : "Global Dashboard"}</p>
             </div>
           </div>
           {entries.length > 0 && (
@@ -355,8 +419,8 @@ export default function AdminPortal({ user, onLogout }) {
                     <div style={{ width: 68, height: 68, background: "#1e1a3a", borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
                       <div style={{ width: 30, height: 30, border: "3px solid rgba(167,139,250,.3)", borderTop: "3px solid #a78bfa", borderRadius: "50%", animation: "spin .8s linear infinite" }}/>
                     </div>
-                    <h3 style={{ fontSize: 20, fontWeight: 700, color: "#fff", marginBottom: 8 }}>Analysing with Gemini AI…</h3>
-                    <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 22 }}>Parsing entries, detecting clashes, running AI analysis</p>
+                    <h3 style={{ fontSize: 20, fontWeight: 700, color: "#fff", marginBottom: 8 }}>Analysing…</h3>
+                    <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 22 }}>Parsing entries, detecting clashes, running analysis</p>
                     <div style={{ width: 260, height: 5, background: "rgba(255,255,255,.05)", borderRadius: 99, overflow: "hidden" }}>
                       <div style={{ width: "72%", height: "100%", background: "linear-gradient(90deg,#7c3aed,#a855f7)", borderRadius: 99, animation: "pulse 1.1s ease infinite" }}/>
                     </div>
@@ -366,8 +430,17 @@ export default function AdminPortal({ user, onLogout }) {
                     <div style={{ width: 76, height: 76, background: "#1e1a3a", border: "1px solid rgba(124,58,237,.3)", borderRadius: 22, display: "flex", alignItems: "center", justifyContent: "center", color: "#a855f7", marginBottom: 20, animation: "float 3.5s ease infinite" }}>
                       <BarChart2 size={34}/>
                     </div>
-                    <h3 style={{ fontSize: 22, fontWeight: 700, color: "#fff", marginBottom: 8 }}>Upload Timetable Excel</h3>
-                    <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 28 }}>Drag & drop your .xlsx files or click to browse</p>
+                    <h3 style={{ fontSize: 22, fontWeight: 700, color: "#fff", marginBottom: 8 }}>Upload New Timetable</h3>
+                    
+                    <input 
+                      type="text" 
+                      placeholder="Timetable Title (e.g. B.Tech Sem 2)" 
+                      value={timetableTitle}
+                      onChange={e => setTimetableTitle(e.target.value)}
+                      onClick={e => e.stopPropagation()}
+                      style={{ background: "#0a0a0a", border: "1px solid rgba(255,255,255,.1)", borderRadius: 12, padding: "12px 18px", color: "#fff", marginBottom: 20, width: "100%", maxWidth: 300, fontSize: 14 }}
+                    />
+                    
                     <button className="btn btn-purple" style={{ fontSize: 14, padding: "12px 28px", display: "flex", alignItems: "center", gap: 8 }} onClick={e => { e.stopPropagation(); fileRef.current.click(); }}>
                       <FileSpreadsheet size={16}/> Choose Excel Files
                     </button>
@@ -492,7 +565,7 @@ export default function AdminPortal({ user, onLogout }) {
                               return (
                                 <div key={ei} style={{ background: "#1a1a1a", border: `1px solid ${movedTime ? "rgba(74,222,128,.3)" : "rgba(255,255,255,.06)"}`, borderRadius: 9, padding: "5px 10px", fontSize: 11, display: "flex", gap: 5, alignItems: "center" }}>
                                   <span className={`tag tag-${e.type}`} style={{ fontSize: 9 }}>{e.type === "L" ? "Lec" : e.type === "T" ? "Tut" : "Lab"}</span>
-                                  <span style={{ color: "#fff", fontWeight: 700 }}>{e.subject}</span>
+                                  <span style={{ color: "#fff", fontWeight: 700 }}>{getSubjectName(e.subject)}</span>
                                   <span style={{ color: "#6b7280" }}>({e.batches.join(",")})</span>
                                   <span style={{ color: "#a78bfa" }}>@{e.venue}</span>
                                   <span style={{ color: "#6b7280" }}>·{e.teacher}</span>
@@ -544,6 +617,32 @@ export default function AdminPortal({ user, onLogout }) {
                       </div>
                     ))}
                   </div>
+
+                  {/* ── Drag-and-Drop Timetable Grid ─────────────────────────── */}
+                  <div className="glass-panel" style={{ marginTop: 24, padding: 20, borderRadius: 16 }}>
+                    <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+                      <div>
+                        <h3 style={{ fontSize: 14, fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ color: "#a855f7" }}>📅</span> Timetable Grid — Drag to Reschedule
+                        </h3>
+                        <p style={{ fontSize: 11, color: "#6b7280", marginTop: 3 }}>
+                          Drag any class card to a new time slot to move it. 🔴 highlighted cells have clashes.
+                        </p>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        {analyzing && (
+                          <span style={{ fontSize: 11, color: "#a78bfa", display: "flex", alignItems: "center", gap: 5 }}>
+                            <div style={{ width: 12, height: 12, border: "2px solid rgba(167,139,250,.3)", borderTop: "2px solid #a78bfa", borderRadius: "50%", animation: "spin .8s linear infinite" }} />
+                            Saving…
+                          </span>
+                        )}
+                        <button className="btn btn-ghost btn-sm" onClick={() => setPage("view")} style={{ fontSize: 11 }}>
+                          ⛶ Full Screen Grid
+                        </button>
+                      </div>
+                    </div>
+                    <TimetableGrid entries={entries} clashes={clashes} onMoveEntry={handleMoveEntry} orderedDays={orderedDays} orderedTimes={orderedTimes} />
+                  </div>
                 </>
               )}
             </div>
@@ -569,7 +668,51 @@ export default function AdminPortal({ user, onLogout }) {
                       {downloading ? "Generating…" : "📥 Download Excel"}
                     </button>
                   </div>
-                  <TimetableGrid entries={entries} clashes={clashes} onMoveEntry={handleMoveEntry} />
+                  <TimetableGrid entries={entries} clashes={clashes} onMoveEntry={handleMoveEntry} orderedDays={orderedDays} orderedTimes={orderedTimes} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── ARCHIVES / MY TIMETABLES ─────────────────────────────────────── */}
+          {page === "archives" && (
+            <div className="glass-panel" style={{ padding: 24, borderRadius: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+                <div>
+                  <h3 style={{ fontSize: 18, fontWeight: 700, color: "#fff", marginBottom: 6 }}>My Timetables</h3>
+                  <p style={{ fontSize: 13, color: "#6b7280" }}>Manage all your uploaded timetables here.</p>
+                </div>
+                <button className="btn btn-purple" onClick={() => { setTimetableTitle(""); setPage("upload"); }}>+ Upload New</button>
+              </div>
+
+              {versions.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px", color: "#6b7280", fontSize: 13 }}>No timetables found. Upload one to get started.</div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
+                  {versions.map(v => (
+                    <div key={v._id} style={{ background: "#111", border: `1px solid ${activeTimetable?._id === v._id ? "rgba(168,85,247,.4)" : "rgba(255,255,255,.05)"}`, borderRadius: 16, padding: 20, transition: "all .2s ease" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                        <h4 style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>{v.title}</h4>
+                        {v.status === "published" ? <Chip text="🟢 Live" bg="#22c55e" /> : <Chip text="📝 Draft" bg="#fb923c" />}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>📄 {v.fileName}</div>
+                      <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 16 }}>🕒 Uploaded {new Date(v.uploadedAt).toLocaleDateString()}</div>
+                      
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button className="btn btn-purple btn-sm" style={{ flex: 1 }} onClick={() => handleSelectTimetable(v)}>
+                          Manage / Review
+                        </button>
+                        <button
+                          className="btn btn-sm"
+                          style={{ background: "rgba(239,68,68,.1)", border: "1px solid rgba(239,68,68,.25)", color: "#f87171", borderRadius: 10, padding: "6px 12px", cursor: "pointer", fontSize: 12, flexShrink: 0 }}
+                          onClick={() => handleDelete(v)}
+                          title="Delete timetable"
+                        >
+                          🗑️ Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

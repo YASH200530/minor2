@@ -64,27 +64,55 @@ function isSafeSlot(entry, testDay, testTime, testVenue, allEntries) {
   return true;
 }
 
-/**
- * suggestSlots(entry, currentSchedule)
- * For a given class that is causing a clash, returns a list of viable alternatives.
- * It suggests either:
- *  - A new Time/Day (keeping the same room)
- *  - A new Room (keeping the same time/day)
- */
+function isSafeSlotFast(entry, testDay, testTime, testVenue, cellOccupants) {
+  for (const existing of cellOccupants) {
+    if (existing === entry || (existing.raw && entry.raw && existing.raw === entry.raw)) {
+      continue;
+    }
+
+    if (existing.venue === testVenue && testVenue) return false;
+
+    const existingTeachers = Array.isArray(existing.teacher) 
+      ? existing.teacher 
+      : (typeof existing.teacher === 'string' ? existing.teacher.split(",").map(s=>s.trim()) : []);
+      
+    const testTeachers = Array.isArray(entry.teacher) 
+      ? entry.teacher 
+      : (typeof entry.teacher === 'string' ? entry.teacher.split(",").map(s=>s.trim()) : []);
+
+    if (testTeachers.some(t => existingTeachers.includes(t))) return false;
+
+    const testBatches = Array.isArray(entry.batches) ? entry.batches : [];
+    const existingBatches = Array.isArray(existing.batches) ? existing.batches : [];
+    
+    if (testBatches.some(b => existingBatches.includes(b))) return false;
+  }
+  return true;
+}
+
 function suggestSlots(entry, currentSchedule) {
   const domain = extractDomain(currentSchedule);
   const suggestions = [];
 
+  // Build O(1) lookup to prevent freezing Node.js event loop
+  const bySlot = {};
+  for (const e of currentSchedule) {
+    const k = e.day + '||' + e.time;
+    if (!bySlot[k]) bySlot[k] = [];
+    bySlot[k].push(e);
+  }
+
   // Suggest alternative time slots (Same Room)
   for (const day of domain.days) {
     for (const time of domain.times) {
-      if (day === entry.day && time === entry.time) continue; // Skip current clashing slot
+      if (day === entry.day && time === entry.time) continue; 
       
-      if (isSafeSlot(entry, day, time, entry.venue, currentSchedule)) {
+      const occupants = bySlot[day + '||' + time] || [];
+      if (isSafeSlotFast(entry, day, time, entry.venue, occupants)) {
         suggestions.push({
           type: 'time_change',
-          day: day,
-          time: time,
+          day,
+          time,
           venue: entry.venue,
           description: `Move to ${day} at ${time} (Same Room)`
         });
@@ -93,15 +121,16 @@ function suggestSlots(entry, currentSchedule) {
   }
 
   // Suggest alternative rooms (Same Time)
+  const exactOccupants = bySlot[entry.day + '||' + entry.time] || [];
   for (const venue of domain.venues) {
     if (venue === entry.venue) continue; 
     
-    if (isSafeSlot(entry, entry.day, entry.time, venue, currentSchedule)) {
+    if (isSafeSlotFast(entry, entry.day, entry.time, venue, exactOccupants)) {
       suggestions.push({
         type: 'venue_change',
         day: entry.day,
         time: entry.time,
-        venue: venue,
+        venue,
         description: `Stay at ${entry.time} on ${entry.day}, but move to ${venue}`
       });
     }

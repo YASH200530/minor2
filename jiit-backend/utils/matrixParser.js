@@ -69,71 +69,107 @@ function parseCellText(text, timeSlot, dayOrProgram) {
 
 function parseMatrixSheet(rows) {
   const entries = [];
-  if (!rows || rows.length === 0) return entries;
-  
-  let headerRowIdx = 0;
-  let timeColumns = {}; 
-  
-  // Scan first few rows to find the true time slot header mappings
+  if (!rows || rows.length === 0) return { entries, orderedDays: [], orderedTimes: [] };
+
+  let headerRowIdx = -1;
+  let timeColMap = {};
+
+  // Scan first few rows to find the time-slot header row
   for (let r = 0; r < Math.min(rows.length, 10); r++) {
     const row = rows[r];
     if (!row) continue;
     let foundTimeCount = 0;
-    
-    for (const c of Object.keys(row)) {
+    const candidate = {};
+
+    // Sort column keys numerically so left-to-right order is preserved
+    const colKeys = Object.keys(row).sort((a, b) => Number(a) - Number(b));
+
+    for (const c of colKeys) {
       const val = row[c];
       if (val && typeof val === 'string') {
         const up = val.toUpperCase().replace(/\s/g, '');
-        // strict check: contains AM, PM, or matches digit-digit pattern
         if (up.includes("AM") || up.includes("PM") || /\d{1,2}:\d{2}/.test(up) || /\d{1,2}-\d{1,2}/.test(up)) {
           foundTimeCount++;
-          timeColumns[c] = val.trim();
+          candidate[c] = val.trim();
         }
       }
     }
-    // We assume it's the header row if we find at least 2 time slots
+
     if (foundTimeCount >= 2) {
       headerRowIdx = r;
+      timeColMap = candidate;
       break;
-    } else {
-      // reset if it was a false positive row
-      timeColumns = {};
     }
   }
-  
-  // Default fallback if we didn't firmly find a header row
-  if (Object.keys(timeColumns).length === 0) {
-    return entries; // Could not find a valid time grid
+
+  if (headerRowIdx === -1 || Object.keys(timeColMap).length === 0) {
+    return { entries, orderedDays: [], orderedTimes: [] };
   }
 
-  let currentDayOrProg = "Unspecified Day";
-  
-  // Loop through rows below the header
+  // Build orderedTimes in exact left-to-right Excel column order
+  const orderedTimes = Object.keys(timeColMap)
+    .sort((a, b) => Number(a) - Number(b))
+    .map(k => timeColMap[k]);
+
+  // ── Pre-scan: find the FIRST day label that appears in column 0 after the header ──
+  // Entries that appear BEFORE the first explicit day label still belong to that first day
+  // (typical for Excel merged-cell timetables where "MON" is in a lower sub-row)
+  let firstDayLabel = null;
+  for (let r = headerRowIdx + 1; r < Math.min(rows.length, headerRowIdx + 30); r++) {
+    const row = rows[r];
+    if (!row || !row[0] || typeof row[0] !== 'string' || timeColMap[0]) continue;
+    const label = row[0].replace(/[\r\n]+/g, " ").trim();
+    if (label && label.length > 0) {
+      firstDayLabel = label;
+      break;
+    }
+  }
+
+  const orderedDays = [];
+  const seenDays = new Set();
+
+  // Start currentDay as the first detected label (not "Unspecified Day") so
+  // rows before the first explicit day label also get the correct day name
+  let currentDay = firstDayLabel || "Unspecified Day";
+  if (currentDay !== "Unspecified Day") {
+    seenDays.add(currentDay);
+    orderedDays.push(currentDay);
+  }
+
   for (let r = headerRowIdx + 1; r < rows.length; r++) {
     const row = rows[r];
     if (!row) continue;
-    
-    // Check if column 0 holds a row banner (like a Day or Program)
-    if (row[0] && typeof row[0] === 'string' && !timeColumns[0]) {
-       currentDayOrProg = row[0].replace(/[\r\n]+/g, " ").trim();
+
+    // Column 0 holds the day/program label when it's not a time-slot column
+    if (row[0] && typeof row[0] === 'string' && !timeColMap[0]) {
+      const label = row[0].replace(/[\r\n]+/g, " ").trim();
+      if (label && label !== currentDay) {
+        currentDay = label;
+        if (!seenDays.has(label)) {
+          seenDays.add(label);
+          orderedDays.push(label);
+        }
+      }
     }
-    
-    for (const c of Object.keys(row)) {
-      if (!timeColumns[c]) continue; 
+
+    const colKeys = Object.keys(row).sort((a, b) => Number(a) - Number(b));
+    for (const c of colKeys) {
+      if (!timeColMap[c]) continue;
       const cellVal = row[c];
       if (!cellVal) continue;
-      
-      const timeSlot = timeColumns[c];
+
+      const timeSlot = timeColMap[c];
       const lines = String(cellVal).split(/[\n|]/).map(s => s.trim()).filter(Boolean);
-      
+
       for (const line of lines) {
-        const parsed = parseCellText(line, timeSlot, currentDayOrProg);
+        const parsed = parseCellText(line, timeSlot, currentDay);
         if (parsed) entries.push(parsed);
       }
     }
   }
-  
-  return entries;
+
+  return { entries, orderedDays, orderedTimes };
 }
 
 module.exports = { parseMatrixSheet, parseCellText };
+
