@@ -2,9 +2,32 @@ const XLSX = require("xlsx");
 const path = require("path");
 const { parseMatrixSheet } = require("../utils/matrixParser");
 const { detectClashes } = require("../utils/clashDetector");
-const { suggestSlots, autoSchedule } = require("../utils/constraintSolver");
+const { suggestSlots, autoSchedule, extractDomain } = require("../utils/constraintSolver");
 const { exportFullTimetable, exportBatchTimetable } = require("../utils/excelExporter");
 const TimetableVersion = require("../models/TimetableVersion");
+
+// ── Helper to detect clashes and add suggestions efficiently ────────────────────
+function detectClashesWithSuggestions(entries) {
+  const clashes = detectClashes(entries);
+  if (clashes.length === 0) return clashes;
+
+  // Pre-calculate domain and slot index ONCE for all suggestions
+  const domain = extractDomain(entries);
+  const bySlot = {};
+  for (const e of entries) {
+    const k = e.day + '||' + e.time;
+    if (!bySlot[k]) bySlot[k] = [];
+    bySlot[k].push(e);
+  }
+
+  clashes.forEach(clash => {
+    if (clash.entries.length > 0) {
+      clash.suggestedSlots = suggestSlots(clash.entries[0], entries, domain, bySlot);
+    }
+  });
+
+  return clashes;
+}
 
 // ── Order helpers (used when DB records lack stored orderedDays/orderedTimes) ──
 function parseTimeValue(str) {
@@ -76,14 +99,7 @@ const uploadTimetable = async (req, res) => {
       for (const t of parsed.orderedTimes) { if (!orderedTimes.includes(t)) orderedTimes.push(t); }
     }
 
-    const clashes = detectClashes(entries);
-
-    // Attach CSP solver suggestions to each clash instantly
-    clashes.forEach(clash => {
-      if (clash.entries.length > 0) {
-        clash.suggestedSlots = suggestSlots(clash.entries[0], entries);
-      }
-    });
+    const clashes = detectClashesWithSuggestions(entries);
 
     const fileName = req.files.map(f => f.originalname).join(", ");
     const title = req.body.title || fileName || "Uploaded Timetable";
@@ -213,11 +229,20 @@ const resolveClash = async (req, res) => {
       });
     }
 
+    // Recalculate clashes dynamically with suggestions (optimized)
+    const updatedClashes = detectClashesWithSuggestions(version.entries);
+    version.clashes = updatedClashes;
+
     version.markModified('clashes');
     version.markModified('entries');
     await version.save();
 
-    res.json({ message: "Clash resolved", clash: version.clashes[idx] });
+    res.json({ 
+      message: "Clash resolved", 
+      clash: version.clashes[idx],
+      clashes: version.clashes,
+      entries: version.entries
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -233,7 +258,12 @@ const resolveAllClashes = async (req, res) => {
     version.markModified('clashes');
     await version.save();
 
-    res.json({ message: "All clashes resolved", total: version.clashes.length });
+    res.json({ 
+      message: "All clashes resolved", 
+      total: version.clashes.length,
+      clashes: version.clashes,
+      entries: version.entries
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -260,20 +290,20 @@ const moveEntry = async (req, res) => {
 
     if (!entryUpdated) return res.status(404).json({ error: "Entry not found" });
 
-    // Recalculate clashes dynamically
-    const clashes = detectClashes(version.entries);
-    clashes.forEach(clash => {
-      if (clash.entries.length > 0) {
-        clash.suggestedSlots = suggestSlots(clash.entries[0], version.entries);
-      }
-    });
+    // Recalculate clashes dynamically with suggestions (optimized)
+    const clashes = detectClashesWithSuggestions(version.entries);
 
     version.clashes = clashes;
     version.markModified('entries');
     version.markModified('clashes');
     await version.save();
 
-    res.json({ message: "Entry moved successfully", clashes: clashes.length });
+    res.json({ 
+      message: "Entry moved successfully", 
+      clashes: clashes,
+      entries: version.entries,
+      totalClashes: clashes.length 
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -426,7 +456,7 @@ const downloadFullTimetable = async (req, res) => {
     const version = await TimetableVersion.findById(req.params.id);
     if (!version) return res.status(404).json({ error: "Not found" });
 
-    const buf = await exportFullTimetable(version.entries, version.clashes);
+    const buf = await exportFullTimetable(version.entries, version.clashes, version.orderedDays, version.orderedTimes);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="Timetable_${version.title}.xlsx"`);
     res.send(buf);
@@ -444,7 +474,7 @@ const downloadBatchTimetable = async (req, res) => {
       return res.status(403).json({ error: "Timetable not published yet." });
 
     const { batch } = req.params;
-    const buf = await exportBatchTimetable(version.entries, batch);
+    const buf = await exportBatchTimetable(version.entries, batch, version.orderedDays, version.orderedTimes);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="${version.title}_Batch_${batch}.xlsx"`);
     res.send(buf);

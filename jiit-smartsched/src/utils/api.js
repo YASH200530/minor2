@@ -111,8 +111,8 @@ export async function getStudentTimetable(batch, versionId = "active") {
   return res.json();
 }
 
-export async function downloadBatchTimetable(batch) {
-  const res = await fetch(`${BASE}/download/batch/${batch}`);
+export async function downloadBatchTimetable(id, batch) {
+  const res = await fetch(`${BASE}/${id}/download/batch/${batch}`);
   if (!res.ok) throw new Error((await res.json()).error);
   const blob = await res.blob();
   downloadBlob(blob, `JIIT_Timetable_Batch_${batch}.xlsx`);

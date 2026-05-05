@@ -10,6 +10,7 @@ export default function TimetableGrid({
   isStudent = false,
   orderedDays: propDays = [],
   orderedTimes: propTimes = [],
+  customColors = {},
 }) {
   const [subFilter, setSubFilter] = useState("all");
 
@@ -159,7 +160,7 @@ export default function TimetableGrid({
                           <div style={{ display:"flex", flexDirection:"column", gap:2, minHeight: "40px" }}>
                             {cells.map((cell, ci) => {
                               const isClash = clashSet.has(`${cell.day}||${cell.time}||${cell.raw}`);
-                              const col = getSubjectColor(cell.subject);
+                              const col = customColors[cell.subject] || getSubjectColor(cell.subject);
                               return (
                                 <div
                                   key={ci}

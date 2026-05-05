@@ -1,21 +1,53 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LandingPage   from "./pages/LandingPage";
 import LoginPage     from "./pages/LoginPage";
 import AdminPortal   from "./pages/AdminPortal";
 import StudentPortal from "./pages/StudentPortal";
 
 export default function App() {
-  const [view, setView] = useState("landing");
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    const savedUser = localStorage.getItem("user");
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
 
-  if (view === "landing")
-    return <LandingPage onGetStarted={() => setView("login")} />;
+  const handleLogin = (u) => {
+    setUser(u);
+    localStorage.setItem("user", JSON.stringify(u));
+  };
 
-  if (view === "login" && !user)
-    return <LoginPage onLogin={(u) => { setUser(u); setView("app"); }} />;
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+  };
 
-  if (user?.role === "admin")
-    return <AdminPortal user={user} onLogout={() => { setUser(null); setView("landing"); }} />;
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<LandingPage onGetStarted={() => {}} />} />
+        
+        <Route path="/login" element={
+          user ? <Navigate to={user.role === "admin" ? "/admin" : "/student"} /> : <LoginPage onLogin={handleLogin} />
+        } />
 
-  return <StudentPortal user={user} onLogout={() => { setUser(null); setView("landing"); }} />;
+        <Route 
+          path="/admin" 
+          element={
+            user?.role === "admin" ? <AdminPortal user={user} onLogout={handleLogout} /> : <Navigate to="/login" />
+          } 
+        />
+
+        <Route 
+          path="/student" 
+          element={
+            user?.role === "student" ? <StudentPortal user={user} onLogout={handleLogout} /> : <Navigate to="/login" />
+          } 
+        />
+
+        {/* Catch all redirect */}
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    </BrowserRouter>
+  );
 }

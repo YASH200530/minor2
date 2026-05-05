@@ -11,9 +11,9 @@ const TIME_SLOTS = ["9:00","10:00","11:00","LUNCH","1:00","2:00","3:00","4:00"];
 const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
 // Build grid from entries
-function buildGrid(entries) {
+function buildGrid(entries, days, times) {
   const grid = {};
-  DAYS.forEach(d => TIME_SLOTS.forEach(t => { grid[`${d}||${t}`] = []; }));
+  days.forEach(d => times.forEach(t => { grid[`${d}||${t}`] = []; }));
   entries.forEach(e => {
     const k = `${e.day}||${e.time}`;
     if (grid[k] !== undefined) grid[k].push(e);
@@ -22,7 +22,10 @@ function buildGrid(entries) {
 }
 
 // Export full timetable (all batches) - for admin download
-async function exportFullTimetable(entries, clashes = []) {
+async function exportFullTimetable(entries, clashes = [], orderedDays, orderedTimes) {
+  const finalDays = (orderedDays && orderedDays.length) ? orderedDays : DAYS;
+  const finalTimes = (orderedTimes && orderedTimes.length) ? orderedTimes : TIME_SLOTS;
+
   const wb = new ExcelJS.Workbook();
   wb.creator = "JIIT SmartSched AI";
   wb.created = new Date();
@@ -44,7 +47,7 @@ async function exportFullTimetable(entries, clashes = []) {
   ws.getRow(1).height = 32;
 
   // Header row
-  const headers = ["Day", "9:00", "10:00", "11:00", "LUNCH", "1:00", "2:00", "3:00", "4:00"];
+  const headers = ["Day", ...finalTimes];
   const headerRow = ws.addRow(headers);
   headerRow.eachCell(cell => {
     cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 10 };
@@ -59,21 +62,21 @@ async function exportFullTimetable(entries, clashes = []) {
   });
   ws.getRow(2).height = 24;
 
-  const grid = buildGrid(entries);
+  const grid = buildGrid(entries, finalDays, finalTimes);
 
   // Day rows
-  for (const day of DAYS) {
+  for (const day of finalDays) {
     // Find max entries in any slot for this day
     let maxEntries = 1;
-    TIME_SLOTS.forEach(t => {
+    finalTimes.forEach(t => {
       const cells = grid[`${day}||${t}`] || [];
       if (cells.length > maxEntries) maxEntries = cells.length;
     });
 
     for (let i = 0; i < maxEntries; i++) {
       const rowData = [i === 0 ? day : ""];
-      for (const time of TIME_SLOTS) {
-        if (time === "LUNCH") { rowData.push(i === 0 ? "LUNCH BREAK" : ""); continue; }
+      for (const time of finalTimes) {
+        if (time.toUpperCase() === "LUNCH") { rowData.push(i === 0 ? "LUNCH BREAK" : ""); continue; }
         const cells = grid[`${day}||${time}`] || [];
         const cell  = cells[i];
         rowData.push(cell
@@ -115,14 +118,17 @@ async function exportFullTimetable(entries, clashes = []) {
 
   // Column widths
   ws.getColumn(1).width = 12;
-  for (let c = 2; c <= 9; c++) ws.getColumn(c).width = 22;
+  for (let c = 2; c <= headers.length; c++) ws.getColumn(c).width = 22;
 
   const buf = await wb.xlsx.writeBuffer();
   return buf;
 }
 
 // Export timetable for a specific batch - for student download
-async function exportBatchTimetable(entries, batch) {
+async function exportBatchTimetable(entries, batch, orderedDays, orderedTimes) {
+  const finalDays = (orderedDays && orderedDays.length) ? orderedDays : DAYS;
+  const finalTimes = (orderedTimes && orderedTimes.length) ? orderedTimes : TIME_SLOTS;
+
   const filtered = entries.filter(e => e.batches.includes(batch));
   const wb = new ExcelJS.Workbook();
   wb.creator = "JIIT SmartSched AI";
@@ -140,7 +146,7 @@ async function exportBatchTimetable(entries, batch) {
   ws.getRow(1).height = 30;
 
   // Header
-  const headers = ["Day", "9:00", "10:00", "11:00", "LUNCH", "1:00", "2:00", "3:00", "4:00"];
+  const headers = ["Day", ...finalTimes];
   const headerRow = ws.addRow(headers);
   headerRow.eachCell(cell => {
     cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 10 };
@@ -155,7 +161,7 @@ async function exportBatchTimetable(entries, batch) {
   });
   ws.getRow(2).height = 22;
 
-  const grid = buildGrid(filtered);
+  const grid = buildGrid(filtered, finalDays, finalTimes);
 
   // Colour map for subjects
   const SUBJECT_COLORS = {
@@ -164,17 +170,17 @@ async function exportBatchTimetable(entries, batch) {
     CS121:"FF14B8A6", MA212:"FFA855F7", PH212:"FF6366F1",
   };
 
-  for (const day of DAYS) {
+  for (const day of finalDays) {
     let maxEntries = 1;
-    TIME_SLOTS.forEach(t => {
+    finalTimes.forEach(t => {
       const cells = grid[`${day}||${t}`] || [];
       if (cells.length > maxEntries) maxEntries = cells.length;
     });
 
     for (let i = 0; i < maxEntries; i++) {
       const rowData = [i === 0 ? day : ""];
-      for (const time of TIME_SLOTS) {
-        if (time === "LUNCH") { rowData.push(i === 0 ? "LUNCH BREAK" : ""); continue; }
+      for (const time of finalTimes) {
+        if (time.toUpperCase() === "LUNCH") { rowData.push(i === 0 ? "LUNCH BREAK" : ""); continue; }
         const cells = grid[`${day}||${time}`] || [];
         const cell  = cells[i];
         if (cell) {
@@ -219,7 +225,7 @@ async function exportBatchTimetable(entries, batch) {
   }
 
   ws.getColumn(1).width = 12;
-  for (let c = 2; c <= 9; c++) ws.getColumn(c).width = 20;
+  for (let c = 2; c <= headers.length; c++) ws.getColumn(c).width = 20;
 
   const buf = await wb.xlsx.writeBuffer();
   return buf;

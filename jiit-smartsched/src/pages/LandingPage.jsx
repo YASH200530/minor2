@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const features = [
   {
@@ -17,8 +18,8 @@ const features = [
   },
   {
     icon: "✨",
-    title: "AI Suggestions & Auto-Resolve",
-    desc: "Every detected clash gets an AI-generated fix. Resolve clashes individually with one click, or hit Auto-Resolve All to clear every conflict instantly.",
+    title: "Suggestions & Auto-Resolve",
+    desc: "Every detected clash gets a fix. Resolve clashes individually with one click, or hit Auto-Resolve All to clear every conflict instantly.",
     tag: "AI",
     tagColor: "#f59e0b",
   },
@@ -52,8 +53,9 @@ const stats = [
   { label: "Clashes Resolved", value: "99%" },
 ];
 
-export default function LandingPage({ onGetStarted }) {
+export default function LandingPage() {
   const [hoveredFeature, setHoveredFeature] = useState(null);
+  const navigate = useNavigate();
 
   return (
     <div style={{ background: "#0a0a0a", color: "#fff", fontFamily: "'Inter', sans-serif", minHeight: "100vh", overflowX: "hidden" }}>
@@ -73,7 +75,7 @@ export default function LandingPage({ onGetStarted }) {
             display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
           }}>📅</div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 14, color: "#fff" }}>JIIT SmartSched AI</div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: "#fff" }}>JIIT SmartSched</div>
             <div style={{ fontSize: 10, color: "#6b7280" }}>Sector 128 & 62</div>
           </div>
         </div>
@@ -88,7 +90,7 @@ export default function LandingPage({ onGetStarted }) {
           ))}
         </div>
 
-        <button onClick={onGetStarted} style={{
+        <button onClick={() => navigate("/login")} style={{
           background: "#7c3aed", color: "#fff", border: "none",
           borderRadius: 10, padding: "9px 20px", fontSize: 13,
           fontWeight: 600, cursor: "pointer", transition: "all 0.18s",
@@ -114,13 +116,13 @@ export default function LandingPage({ onGetStarted }) {
           display: "inline-flex", alignItems: "center", gap: 7,
           background: "rgba(30,26,58,0.85)", border: "1px solid rgba(124,58,237,0.35)",
           color: "#c4b5fd", fontSize: 13, padding: "7px 18px", borderRadius: 99, marginBottom: 28,
-        }}>✨ AI-Powered Scheduling</div>
+        }}>✨ Automated Clash Detection</div>
 
         <h1 style={{ fontSize: "clamp(42px, 7vw, 72px)", fontWeight: 800, color: "#fff", marginBottom: 20, lineHeight: 1.1, letterSpacing: "-0.02em" }}>
-          JIIT SmartSched AI
+          JIIT SmartSched
         </h1>
         <p style={{ fontSize: 18, color: "#9ca3af", marginBottom: 8, maxWidth: 540 }}>
-          AI-powered timetable clash detection and optimization for
+          timetable clash detection and optimization for
         </p>
         <p style={{ fontSize: 18, color: "#a78bfa", fontWeight: 600, marginBottom: 10 }}>
           Jaypee Institute of Information Technology
@@ -129,7 +131,7 @@ export default function LandingPage({ onGetStarted }) {
           Sector 128, Noida &nbsp;•&nbsp; Sector 62, Noida
         </p>
 
-        <button onClick={onGetStarted} style={{
+        <button onClick={() => navigate("/login")} style={{
           display: "inline-flex", alignItems: "center", gap: 10,
           background: "#7c3aed", color: "#fff", border: "none",
           borderRadius: 14, padding: "15px 38px", fontSize: 15, fontWeight: 700, cursor: "pointer",

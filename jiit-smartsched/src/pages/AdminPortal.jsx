@@ -98,8 +98,9 @@ export default function AdminPortal({ user, onLogout }) {
 
   const handleResolve = async (index) => {
     try {
-      await resolveClash(activeTimetable._id, index);
-      await refreshData();
+      const result = await resolveClash(activeTimetable._id, index);
+      setEntries(result.entries);
+      setClashes(result.clashes);
       setResolveModalIdx(null);
     } catch (e) { showToast("❌ " + e.message, "error"); }
   };
@@ -107,15 +108,30 @@ export default function AdminPortal({ user, onLogout }) {
   const handleApplySuggestion = async (idx, slot) => {
     try {
       const clash = clashes[idx];
-      const change = {
-        classIndex: 0,
-        field: slot.type === 'time_change' ? 'time' : 'venue',
-        oldValue: slot.type === 'time_change' ? clash.time : clash.venue,
-        newValue: slot.type === 'time_change' ? slot.day + " " + slot.time : slot.venue,
-        reason: slot.description
-      };
-      await resolveClash(activeTimetable._id, idx, { appliedChanges: [change], summary: "CSP Fix: " + slot.description });
-      await refreshData();
+      const appliedChanges = [];
+      
+      if (slot.type === 'time_change' || slot.type === 'combined_change') {
+        appliedChanges.push({
+          classIndex: 0,
+          field: 'time',
+          oldValue: clash.day + " " + clash.time,
+          newValue: slot.day + " " + slot.time,
+          reason: slot.description
+        });
+      }
+      
+      if (slot.type === 'venue_change' || slot.type === 'combined_change') {
+        appliedChanges.push({
+          classIndex: 0,
+          field: 'venue',
+          oldValue: clash.entries[0]?.venue || "",
+          newValue: slot.venue,
+          reason: slot.description
+        });
+      }
+      const result = await resolveClash(activeTimetable._id, idx, { appliedChanges, summary: "CSP Fix: " + slot.description });
+      setEntries(result.entries);
+      setClashes(result.clashes);
       setResolveModalIdx(null);
       showToast("✅ Applied CSP suggestion successfully!");
     } catch (e) {
@@ -125,8 +141,9 @@ export default function AdminPortal({ user, onLogout }) {
 
   const handleResolveAll = async () => {
     try {
-      await resolveAllClashes(activeTimetable._id);
-      await refreshData();
+      const result = await resolveAllClashes(activeTimetable._id);
+      setEntries(result.entries);
+      setClashes(result.clashes);
       showToast("✅ All clashes resolved manually!");
     } catch (e) { showToast("❌ " + e.message, "error"); }
   };
@@ -135,8 +152,9 @@ export default function AdminPortal({ user, onLogout }) {
     try {
       if (dragData.day === newDay && dragData.time === newTime) return; // No change
       setAnalyzing(true);
-      await moveEntry(activeTimetable._id, dragData, newDay, newTime);
-      await refreshData();
+      const result = await moveEntry(activeTimetable._id, dragData, newDay, newTime);
+      setEntries(result.entries);
+      setClashes(result.clashes);
       showToast(`🔄 Moved ${dragData.subject} to ${newDay} ${newTime}`, "success");
     } catch (e) {
       showToast("❌ " + e.message, "error");
@@ -375,7 +393,7 @@ export default function AdminPortal({ user, onLogout }) {
         {/* Topbar */}
         <header style={{ padding: "12px 24px", borderBottom: "1px solid rgba(255,255,255,.05)", background: "#0d0d0d", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <button className="btn btn-ghost btn-sm" onClick={onLogout} style={{ display: "flex", alignItems: "center", gap: 5 }}>← Back</button>
+
             <div>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>
                 {page === "archives" ? "My Timetables" : page === "upload" ? "Upload Timetable" : page === "clashes" ? "⚠️ Clash Detection" : "📅 Timetable View"}

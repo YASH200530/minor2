@@ -59,7 +59,7 @@ export default function Dashboard({ onBack }) {
               <Calendar size={18} className="text-purple-400" />
             </div>
             <div>
-              <div className="font-bold text-white text-sm">JIIT SmartSched AI</div>
+              <div className="font-bold text-white text-sm">JIIT SmartSched</div>
               <div className="text-[11px] text-gray-500">Timetable Manager</div>
             </div>
           </div>
@@ -90,11 +90,10 @@ export default function Dashboard({ onBack }) {
             <button
               key={id}
               onClick={() => setActivePage(id)}
-              className={`sidebar-item w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                activePage === id
-                  ? 'bg-purple-600 text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5'
-              }`}
+              className={`sidebar-item w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${activePage === id
+                ? 'bg-purple-600 text-white'
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
             >
               <Icon size={18} />
               {label}
@@ -119,12 +118,7 @@ export default function Dashboard({ onBack }) {
         {/* Top bar */}
         <header className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-[#0d0d0d]">
           <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="text-gray-500 hover:text-white transition-colors"
-            >
-              <X size={18} />
-            </button>
+
             <h1 className="text-lg font-semibold text-white">{pageTitles[activePage]}</h1>
           </div>
           <div className="flex items-center gap-3">

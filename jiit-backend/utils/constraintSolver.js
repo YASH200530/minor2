@@ -29,6 +29,16 @@ function extractDomain(entries) {
  * Returns true if safe (no conflicts), false if there is a conflict.
  */
 function isSafeSlot(entry, testDay, testTime, testVenue, allEntries) {
+  // Helper to get normalized list of teachers
+  const getTeachers = (t) => {
+    if (Array.isArray(t)) return t;
+    if (typeof t !== 'string') return [];
+    return t.split(/[,/]/).map(s => s.trim()).filter(Boolean);
+  };
+
+  const testTeachers = getTeachers(entry.teacher);
+  const testBatches = Array.isArray(entry.batches) ? entry.batches : [];
+
   for (const existing of allEntries) {
     // Skip checking against itself
     if (existing === entry || (existing.raw && entry.raw && existing.raw === entry.raw)) {
@@ -42,64 +52,62 @@ function isSafeSlot(entry, testDay, testTime, testVenue, allEntries) {
       if (existing.venue === testVenue && testVenue) return false;
 
       // 2. Teacher Constraint: Teacher cannot be in two places
-      const existingTeachers = Array.isArray(existing.teacher) 
-        ? existing.teacher 
-        : (typeof existing.teacher === 'string' ? existing.teacher.split(",").map(s=>s.trim()) : []);
-        
-      const testTeachers = Array.isArray(entry.teacher) 
-        ? entry.teacher 
-        : (typeof entry.teacher === 'string' ? entry.teacher.split(",").map(s=>s.trim()) : []);
-
-      const teacherConflict = testTeachers.some(t => existingTeachers.includes(t));
-      if (teacherConflict) return false;
+      const existingTeachers = getTeachers(existing.teacher);
+      if (testTeachers.some(t => existingTeachers.includes(t))) return false;
 
       // 3. Batch Constraint: Batches cannot attend two classes simultaneously
-      const testBatches = Array.isArray(entry.batches) ? entry.batches : [];
       const existingBatches = Array.isArray(existing.batches) ? existing.batches : [];
-      
-      const batchConflict = testBatches.some(b => existingBatches.includes(b));
-      if (batchConflict) return false;
+      if (testBatches.some(b => existingBatches.includes(b))) return false;
     }
   }
   return true;
 }
 
 function isSafeSlotFast(entry, testDay, testTime, testVenue, cellOccupants) {
+  // 1. Check if the room itself is already occupied at this time
+  if (testVenue && cellOccupants.some(e => e.venue === testVenue && e.raw !== entry.raw)) {
+    return false;
+  }
+
+  // Helper to get normalized list of teachers
+  const getTeachers = (t) => {
+    if (Array.isArray(t)) return t;
+    if (typeof t !== 'string') return [];
+    // Split by comma or slash
+    return t.split(/[,/]/).map(s => s.trim()).filter(Boolean);
+  };
+
+  const testTeachers = getTeachers(entry.teacher);
+  const testBatches = Array.isArray(entry.batches) ? entry.batches : [];
+
   for (const existing of cellOccupants) {
     if (existing === entry || (existing.raw && entry.raw && existing.raw === entry.raw)) {
       continue;
     }
 
-    if (existing.venue === testVenue && testVenue) return false;
-
-    const existingTeachers = Array.isArray(existing.teacher) 
-      ? existing.teacher 
-      : (typeof existing.teacher === 'string' ? existing.teacher.split(",").map(s=>s.trim()) : []);
-      
-    const testTeachers = Array.isArray(entry.teacher) 
-      ? entry.teacher 
-      : (typeof entry.teacher === 'string' ? entry.teacher.split(",").map(s=>s.trim()) : []);
-
+    // 2. Teacher Constraint: Teacher cannot be in two places
+    const existingTeachers = getTeachers(existing.teacher);
     if (testTeachers.some(t => existingTeachers.includes(t))) return false;
 
-    const testBatches = Array.isArray(entry.batches) ? entry.batches : [];
+    // 3. Batch Constraint: Batches cannot attend two classes simultaneously
     const existingBatches = Array.isArray(existing.batches) ? existing.batches : [];
-    
     if (testBatches.some(b => existingBatches.includes(b))) return false;
   }
   return true;
 }
 
-function suggestSlots(entry, currentSchedule) {
-  const domain = extractDomain(currentSchedule);
+function suggestSlots(entry, currentSchedule, precalcDomain = null, precalcBySlot = null) {
+  const domain = precalcDomain || extractDomain(currentSchedule);
   const suggestions = [];
 
-  // Build O(1) lookup to prevent freezing Node.js event loop
-  const bySlot = {};
-  for (const e of currentSchedule) {
-    const k = e.day + '||' + e.time;
-    if (!bySlot[k]) bySlot[k] = [];
-    bySlot[k].push(e);
+  // Build O(1) lookup
+  const bySlot = precalcBySlot || {};
+  if (!precalcBySlot) {
+    for (const e of currentSchedule) {
+      const k = e.day + '||' + e.time;
+      if (!bySlot[k]) bySlot[k] = [];
+      bySlot[k].push(e);
+    }
   }
 
   // Suggest alternative time slots (Same Room)
@@ -190,4 +198,4 @@ function autoSchedule(entries) {
   return schedule;
 }
 
-module.exports = { suggestSlots, autoSchedule, isSafeSlot };
+module.exports = { suggestSlots, autoSchedule, isSafeSlot, extractDomain };
